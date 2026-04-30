@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+backend/.venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Data (keep structure, ignore user data)
+data/state.json
+data/uploads/
+data/sessions/
+data/chrome_user_data/
+data/process.log
+data/stealth_check.png
+
+# Agent data
+agent/data.json
+agent/__pycache__/
+
+# OS
+.DS_Store
+*.log
+
+# Environment
+.env

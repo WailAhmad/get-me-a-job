@@ -1,0 +1,52 @@
+{
+  "identity": {
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "phone": "",
+    "country_code": "",
+    "city": "",
+    "country": "",
+    "nationality": [],
+    "linkedin": ""
+  },
+  "profile": {
+    "headline": "",
+    "summary": "",
+    "years_experience": 0,
+    "current_title": "",
+    "current_company": "",
+    "current_employment_type": "",
+    "skills": [],
+    "education": [],
+    "experience_summary": []
+  },
+  "targets": {
+    "titles": [],
+    "locations": [],
+    "recency_days": 7,
+    "exclude_companies": []
+  },
+  "preferences": {
+    "min_match_score": 85,
+    "max_per_hour": 20,
+    "max_per_day": 100,
+    "delay_seconds": [120, 240],
+    "willing_to_relocate": true,
+    "visa_sponsorship_required": false,
+    "work_authorization": "",
+    "salary_expectation_currency": "USD",
+    "salary_expectation_monthly": null,
+    "salary_expectation_annual": null,
+    "notice_period_days": null,
+    "earliest_start_date": null,
+    "preferred_employment_type": ["Permanent"],
+    "preferred_work_mode": ["On-site", "Hybrid", "Remote"]
+  },
+  "ai": {
+    "provider": "groq",
+    "api_key_env": "AI_API_KEY",
+    "model": "llama-3.3-70b-versatile",
+    "base_url": "https://api.groq.com/openai/v1"
+  }
+}
