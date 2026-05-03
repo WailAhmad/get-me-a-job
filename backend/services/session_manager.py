@@ -1,12 +1,70 @@
 """
 LinkedIn Session Manager — uses a fresh temp dir for login to avoid
 Chrome 'Your preferences cannot be read' dialog.
+
+On Replit, Chrome is provided by nixpkgs (chromium) and CHROME_BIN /
+CHROMEDRIVER_PATH env vars point to the binaries.
 """
 import os
 import logging
 import shutil
 from pathlib import Path
 from backend.config import CHROME_PROFILE_PATH
+
+# On Replit, nixpkgs installs chromium to a nix store path.
+# CHROME_BIN and CHROMEDRIVER_PATH are set in replit.nix env block.
+_CHROME_BIN = os.environ.get("CHROME_BIN")          # e.g. /nix/store/.../bin/chromium
+_CHROMEDRIVER = os.environ.get("CHROMEDRIVER_PATH")  # e.g. /nix/store/.../bin/chromedriver
+
+
+def _make_chrome_options(headless: bool = True, profile_dir: str = None):
+    """Build Chrome options that work both locally (macOS) and on Replit (nixpkgs)."""
+    from selenium.webdriver.chrome.options import Options
+    options = Options()
+
+    # Point to Replit's chromium if available
+    if _CHROME_BIN:
+        options.binary_location = _CHROME_BIN
+
+    if profile_dir:
+        options.add_argument(f"--user-data-dir={profile_dir}")
+        options.add_argument("--profile-directory=Default")
+
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
+    options.add_argument("--disable-sync")
+    options.add_argument("--disable-features=TranslateUI")
+    options.add_argument("--disable-infobars")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+    options.add_experimental_option("prefs", {
+        "credentials_enable_service": False,
+        "profile.password_manager_enabled": False,
+        "profile.default_content_setting_values.notifications": 2,
+    })
+
+    if headless:
+        options.add_argument("--headless=new")
+
+    return options
+
+
+def _make_driver(headless: bool = True, profile_dir: str = None):
+    """Create a Chrome WebDriver, using Replit's chromedriver if available."""
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+
+    options = _make_chrome_options(headless=headless, profile_dir=profile_dir)
+
+    if _CHROMEDRIVER:
+        service = Service(executable_path=_CHROMEDRIVER)
+        return webdriver.Chrome(service=service, options=options)
+    return webdriver.Chrome(options=options)
 
 logger = logging.getLogger(__name__)
 
@@ -74,37 +132,17 @@ def has_valid_session() -> bool:
 def open_login_browser() -> dict:
     """Open a visible Chrome window using a clean dedicated login profile."""
     try:
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-
         login_dir = Path(CHROME_PROFILE_PATH).parent / "chrome_profile_login"
         if login_dir.exists():
             _remove_stale_locks(login_dir)
         (login_dir / "Default").mkdir(parents=True, exist_ok=True)
         logger.info("Login browser using dedicated profile: %s", login_dir)
 
-        options = Options()
-        options.add_argument(f"--user-data-dir={login_dir}")
-        options.add_argument("--profile-directory=Default")
-        options.add_argument("--no-first-run")
-        options.add_argument("--no-default-browser-check")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-sync")
-        options.add_argument("--disable-features=TranslateUI")
-        options.add_argument("--disable-infobars")
-        options.add_argument("--disable-extensions")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
-        options.add_experimental_option("prefs", {
-            "credentials_enable_service": False,
-            "profile.password_manager_enabled": False,
-            "profile.default_content_setting_values.notifications": 2,
-        })
-
-        driver = webdriver.Chrome(options=options)
-        driver.maximize_window()
+        # On Replit there's no physical display — force headless
+        headless = bool(os.environ.get("REPL_ID"))
+        driver = _make_driver(headless=headless, profile_dir=str(login_dir))
+        if not headless:
+            driver.maximize_window()
         driver.get("https://www.linkedin.com/login")
 
         return {"success": True, "message": "Browser opened. Log in to LinkedIn — we'll detect it automatically.", "_driver": driver, "_temp_dir": str(login_dir)}
@@ -152,14 +190,7 @@ def verify_session_valid(driver=None) -> bool:
     try:
         if own_driver:
             import time
-            from selenium import webdriver
-            from selenium.webdriver.chrome.options import Options
-            options = Options()
-            options.add_argument(f"--user-data-dir={get_automation_profile_path()}")
-            options.add_argument("--headless=new")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            driver = webdriver.Chrome(options=options)
+            driver = _make_driver(headless=True, profile_dir=str(get_automation_profile_path()))
         driver.get("https://www.linkedin.com/feed/")
         import time; time.sleep(3)
         return "feed" in driver.current_url

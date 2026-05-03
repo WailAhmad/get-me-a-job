@@ -107,7 +107,13 @@ def _make_driver(headless: bool = True):
     else:
         logger.warning("No profile with LinkedIn cookies found — search will be unauthenticated")
 
+    import os as _os
+    _chrome_bin = _os.environ.get("CHROME_BIN")
+    _chromedriver = _os.environ.get("CHROMEDRIVER_PATH")
+
     options = Options()
+    if _chrome_bin:
+        options.binary_location = _chrome_bin
     options.add_argument(f"--user-data-dir={temp_dir}")
     options.add_argument("--profile-directory=Default")
     if headless:
@@ -125,7 +131,12 @@ def _make_driver(headless: bool = True):
     options.add_argument("--disable-component-update")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
-    driver = webdriver.Chrome(options=options)
+
+    if _chromedriver:
+        from selenium.webdriver.chrome.service import Service as ChromeService
+        driver = webdriver.Chrome(service=ChromeService(executable_path=_chromedriver), options=options)
+    else:
+        driver = webdriver.Chrome(options=options)
     try:
         driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
             "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
