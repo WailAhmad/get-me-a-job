@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 340" fill="none">
+  <!-- Rounded square card background -->
+  <rect width="340" height="340" rx="48" fill="#0d1626"/>
+  <rect x="1" y="1" width="338" height="338" rx="47" stroke="#1e3a5f" stroke-width="2" opacity="0.6"/>
+
+  <!-- ── Glow halo ── -->
+  <ellipse cx="170" cy="148" rx="100" ry="90" fill="url(#halo)" opacity="0.18"/>
+
+  <!-- ── AI Circuit Head (larger, centered) ── -->
+  <g transform="translate(70, 20)">
+    <!-- Head outline -->
+    <path d="M38 165 Q30 145 30 118 Q30 68 68 46 Q88 34 108 36 Q140 40 156 66 Q170 90 164 118 Q160 138 148 152 L148 165"
+          stroke="#14b8a6" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- Horizontal circuit lines -->
+    <line x1="68" y1="72" x2="122" y2="72" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="122" y1="72" x2="122" y2="94" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="80" y1="94" x2="148" y2="94" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="68" y1="116" x2="136" y2="116" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="80" y1="138" x2="148" y2="138" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="68" y1="72" x2="68" y2="138" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="148" y1="94" x2="148" y2="138" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+    <!-- Nodes -->
+    <circle cx="68" cy="72" r="5" fill="#14b8a6"/>
+    <circle cx="122" cy="72" r="5" fill="#14b8a6"/>
+    <circle cx="122" cy="94" r="4" fill="#0ea5e9"/>
+    <circle cx="80" cy="94" r="4" fill="#0ea5e9"/>
+    <circle cx="148" cy="94" r="4" fill="#0ea5e9"/>
+    <circle cx="68" cy="116" r="4" fill="#14b8a6"/>
+    <circle cx="136" cy="116" r="4" fill="#14b8a6"/>
+    <circle cx="68" cy="138" r="4" fill="#0ea5e9"/>
+    <circle cx="148" cy="138" r="4" fill="#14b8a6"/>
+    <!-- City skyline -->
+    <path d="M30 165 L30 182 L50 182 L50 172 L60 172 L60 178 L72 178 L72 165 L90 165 L90 174 L98 174 L98 165 L116 165 L116 180 L128 180 L128 165 L148 165 L148 174 L158 174 L158 165 L168 165 L168 182 L30 182 Z"
+          fill="none" stroke="#14b8a6" stroke-width="2" stroke-linejoin="round" opacity="0.65"/>
+
+    <!-- Flying docs with arrows -->
+    <g opacity="0.9">
+      <!-- doc top -->
+      <rect x="168" y="52" width="26" height="32" rx="4" fill="none" stroke="#14b8a6" stroke-width="2"/>
+      <line x1="174" y1="62" x2="188" y2="62" stroke="#14b8a6" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="174" y1="70" x2="188" y2="70" stroke="#14b8a6" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M198 68 L212 58" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+      <polygon points="212,58 205,55 207,62" fill="#14b8a6"/>
+
+      <!-- doc mid -->
+      <rect x="168" y="100" width="26" height="32" rx="4" fill="none" stroke="#0ea5e9" stroke-width="2"/>
+      <line x1="174" y1="110" x2="188" y2="110" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="174" y1="118" x2="188" y2="118" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M198 116 L212 108" stroke="#0ea5e9" stroke-width="2.2" stroke-linecap="round"/>
+      <polygon points="212,108 205,105 207,112" fill="#0ea5e9"/>
+
+      <!-- doc bottom -->
+      <rect x="168" y="148" width="26" height="32" rx="4" fill="none" stroke="#14b8a6" stroke-width="2"/>
+      <line x1="174" y1="158" x2="188" y2="158" stroke="#14b8a6" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="174" y1="166" x2="188" y2="166" stroke="#14b8a6" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M198 166 L212 158" stroke="#14b8a6" stroke-width="2.2" stroke-linecap="round"/>
+      <polygon points="212,158 205,155 207,162" fill="#14b8a6"/>
+    </g>
+
+    <!-- Briefcase (golden, top right) -->
+    <g transform="translate(196, 28)">
+      <rect x="0" y="12" width="44" height="34" rx="6" fill="url(#gold2)" stroke="#d97706" stroke-width="2"/>
+      <path d="M12 12 L12 6 Q12 0 18 0 L26 0 Q32 0 32 6 L32 12"
+            stroke="#d97706" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      <line x1="0" y1="29" x2="44" y2="29" stroke="#d97706" stroke-width="2" opacity="0.7"/>
+      <circle cx="22" cy="29" r="4" fill="#fbbf24"/>
+      <ellipse cx="22" cy="29" rx="24" ry="22" fill="url(#glowGold2)" opacity="0.5"/>
+    </g>
+  </g>
+
+  <!-- ── Wordmark ── -->
+  <text x="170" y="258" text-anchor="middle"
+        font-family="'Inter','SF Pro Display',system-ui,-apple-system,sans-serif"
+        font-size="56" font-weight="800" fill="#ffffff" letter-spacing="-1.5">JobsLand</text>
+  <text x="170" y="290" text-anchor="middle"
+        font-family="'Inter','SF Pro Display',system-ui,-apple-system,sans-serif"
+        font-size="17" font-weight="400" fill="#64748b" letter-spacing="1">Automated AI Application</text>
+
+  <defs>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#14b8a6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fcd34d"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <radialGradient id="glowGold2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

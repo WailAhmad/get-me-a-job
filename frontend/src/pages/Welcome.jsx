@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { connectGoogleAccount, connectAppleAccount } from '../api/client'
+import { getAuthProviders, startEmailSignup, verifyEmailSignup } from '../api/client'
+import Logo from '../components/Logo'
 
 const SLIDES = [
-  { src:'/photos/slide1.png', quote:'"I got the offer email while sitting in Business Bay. Job Land applied while I was in meetings!"', name:'Nour Al-Rashidi', role:'Marketing Manager · Dubai, UAE' },
-  { src:'/photos/slide2.png', quote:'"Within 10 days I had 4 interviews lined up in Riyadh. Best decision I ever made."', name:'Khalid Al-Zahrani', role:'Business Analyst · Riyadh, KSA' },
-  { src:'/photos/slide3.png', quote:'"I flew from London not knowing anyone in Dubai. Jobs Land got me hired here in 3 weeks. I\'m still pinching myself!"', name:'Emma Clarke', role:'Marketing Director · Dubai, UAE' },
-  { src:'/photos/slide4.png', quote:'"Three weeks after setting up Job Land, I signed my dream contract in Abu Dhabi. Unbelievable!"',  name:'Marco Reyes',    role:'Operations Lead · Abu Dhabi, UAE' },
-  { src:'/photos/slide5.png', quote:'"As a newcomer to the Gulf, I had zero connections. Jobs Land got me hired in under a month."', name:'Lara Khoury', role:'HR Specialist · Doha, Qatar' },
+  { src:'/photos/slide1.png', headline:'Real LinkedIn automation', detail:'JobsLand uses your saved browser session to search LinkedIn and submit Easy Apply forms.' },
+  { src:'/photos/slide2.png', headline:'CV-led matching', detail:'Every search, score, and answer is based on the currently uploaded CV.' },
+  { src:'/photos/slide3.png', headline:'Pending means human review', detail:'Questions the agent cannot safely answer stay in Pending Review instead of being guessed.' },
+  { src:'/photos/slide4.png', headline:'External stays strict', detail:'External is used only when a job does not provide LinkedIn Easy Apply.' },
+  { src:'/photos/slide5.png', headline:'No simulated submissions', detail:'The app reports only real attempts, real pending items, and real connection errors.' },
 ]
 
 export default function Welcome({ onAuthenticated }) {
@@ -15,6 +16,9 @@ export default function Welcome({ onAuthenticated }) {
   const [phase, setPhase]     = useState('idle')
   const [status, setStatus]   = useState('')
   const [imported, setImported] = useState(null)
+  const [providers, setProviders] = useState(null)
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
   const slideRef = useRef(null)
 
   useEffect(() => {
@@ -25,21 +29,48 @@ export default function Welcome({ onAuthenticated }) {
     return () => clearInterval(slideRef.current)
   }, [])
 
-  const handleConnect = async (provider) => {
+  useEffect(() => {
+    getAuthProviders().then(setProviders).catch(() => setProviders(null))
+  }, [])
+
+  const handleOAuth = (provider) => {
     const label = provider === 'apple' ? 'Apple' : 'Google'
+    const configured = providers?.[provider]?.configured
+    if (!configured) {
+      const missing = providers?.[provider]?.missing?.join(', ') || `${label} OAuth credentials`
+      setPhase('error')
+      setStatus(`${label} sign-in is not configured. Add ${missing} to backend .env.`)
+      return
+    }
+    window.location.href = `/api/auth/${provider}/start`
+  }
+
+  const sendEmailCode = async () => {
     setPhase('opening')
-    setStatus(`Creating a temporary ${label} development session...`)
+    setStatus('Sending verification code...')
     try {
-      const result = provider === 'apple'
-        ? await connectAppleAccount()
-        : await connectGoogleAccount()
+      await startEmailSignup(email)
+      setPhase('code')
+      setStatus(`Verification code sent to ${email}.`)
+    } catch (e) {
+      const data = e?.response?.data
+      setPhase('error')
+      setStatus(data?.detail || e.message || 'Could not send verification code.')
+    }
+  }
+
+  const verifyEmailCode = async () => {
+    setPhase('opening')
+    setStatus('Verifying code...')
+    try {
+      const result = await verifyEmailSignup(email, code)
       setImported(result.profile)
       setPhase('done')
-      setStatus(`${label} development sign-in complete.`)
+      setStatus('Email verified.')
       setTimeout(() => onAuthenticated?.(), 650)
     } catch (e) {
       setPhase('error')
-      setStatus(e?.response?.data?.detail || e.message || `${label} sign-in failed.`)
+      setStatus(e?.response?.data?.detail || e.message || 'Verification failed.')
     }
   }
 
@@ -54,18 +85,18 @@ export default function Welcome({ onAuthenticated }) {
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, #06080f 0%, transparent 50%)' }} />
         {/* logo */}
         <div style={{ position:'relative', zIndex:1, display:'flex', alignItems:'center', gap:10, padding:'28px 32px' }}>
-          <img src="/jobsland_logo.png" alt="" style={{ height:36, width:36, borderRadius:10, background:'#fff', objectFit:'contain', padding:2 }} />
-          <span style={{ fontSize:12, fontWeight:700, letterSpacing:'.12em', color:'rgba(255,255,255,.7)', textTransform:'uppercase' }}>Jobs Land</span>
+          <Logo height={92} width={86} style={{ borderRadius:22 }} />
         </div>
         {/* quote */}
         <div style={{ position:'relative', zIndex:1, marginTop:'auto', padding:'28px 32px' }}>
           <div style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.1)', borderRadius:20, padding:20, backdropFilter:'blur(16px)', opacity:fade?1:0, transition:'opacity .5s' }}>
-            <p style={{ fontSize:15, fontStyle:'italic', color:'rgba(255,255,255,.9)', lineHeight:1.6, marginBottom:12 }}>{cur.quote}</p>
-            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <p style={{ fontSize:16, fontWeight:800, color:'rgba(255,255,255,.92)', lineHeight:1.35, marginBottom:8 }}>{cur.headline}</p>
+            <p style={{ fontSize:13, color:'rgba(255,255,255,.68)', lineHeight:1.55, margin:0 }}>{cur.detail}</p>
+            <div style={{ display:'none', alignItems:'center', gap:10 }}>
               <div style={{ height:32, width:32, borderRadius:'50%', background:'linear-gradient(135deg,#3b82f6,#0ea5e9)' }} />
               <div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{cur.name}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,.45)' }}>{cur.role}</div>
+                <div style={{ fontSize:13, fontWeight:600, color:'#fff' }} />
+                <div style={{ fontSize:11, color:'rgba(255,255,255,.45)' }} />
               </div>
             </div>
           </div>
@@ -82,19 +113,9 @@ export default function Welcome({ onAuthenticated }) {
       <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'32px 24px', position:'relative' }}>
         <div style={{ width:'100%', maxWidth:360 }}>
 
-          {/* ── Medium logo, blended into dark bg ── */}
+          {/* ── Logo ── */}
           <div style={{ display:'flex', justifyContent:'center', marginBottom:18 }}>
-            <img
-              src="/jobsland_logo_dark.png"
-              alt="Jobs Land"
-              style={{
-                width:210,
-                borderRadius:20,
-                background:'#000',
-                objectFit:'contain',
-                boxShadow:'0 0 40px rgba(20,184,166,0.22), 0 0 80px rgba(14,165,233,0.1)',
-              }}
-            />
+            <Logo variant="dark" height={196} width={184} glow style={{ borderRadius:34 }} />
           </div>
 
           <h1 style={{ fontSize:32, fontWeight:800, lineHeight:1.15, marginBottom:8, textAlign:'center', background:'linear-gradient(135deg,#fff,#94a3b8)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
@@ -142,9 +163,23 @@ export default function Welcome({ onAuthenticated }) {
           <div style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.08)', borderRadius:24, padding:24, backdropFilter:'blur(24px)' }}>
             {(phase==='idle'||phase==='error') && (
               <div>
-                <p style={{ fontSize:13, color:'#64748b', marginBottom:10, lineHeight:1.6 }}>Step 1: use a temporary Google or Apple development sign-in. After you enter the app, connect job-board accounts in Settings.</p>
-                <p style={{ fontSize:11, color:'#38bdf8', background:'rgba(14,165,233,.08)', border:'1px solid rgba(14,165,233,.18)', borderRadius:10, padding:'8px 10px', marginBottom:12 }}>OAuth is mocked for now so product functionality can move forward. Real Google and Apple credentials can be added at the final production step.</p>
-                <button id="connect-google-btn" onClick={() => handleConnect('google')} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'#ffffff', color:'#1f2937', border:'1px solid rgba(255,255,255,0.16)', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:700, cursor:'pointer', transition:'all .2s', marginBottom:10 }}
+                <p style={{ fontSize:13, color:'#64748b', marginBottom:10, lineHeight:1.6 }}>Step 1: sign up with your email. We send a real verification code to your inbox before signing you in. LinkedIn automation still requires a real LinkedIn session in Settings.</p>
+                <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:12 }}>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="Email address"
+                    autoComplete="email"
+                    onKeyDown={e => { if (e.key === 'Enter' && email.trim()) sendEmailCode() }}
+                    style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:14, outline:'none' }}
+                  />
+                  <button id="email-signup-btn" onClick={sendEmailCode} disabled={!email.trim()} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'linear-gradient(135deg,#2563eb,#0ea5e9)', color:'#ffffff', border:'none', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:800, cursor:email.trim()?'pointer':'not-allowed', opacity:email.trim()?1:.55 }}>
+                    Sign up with email
+                  </button>
+                </div>
+                <div style={{ height:1, background:'rgba(255,255,255,.08)', margin:'14px 0' }} />
+                <button id="connect-google-btn" onClick={() => handleOAuth('google')} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'#ffffff', color:'#1f2937', border:'1px solid rgba(255,255,255,0.16)', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:700, cursor:'pointer', transition:'all .2s', marginBottom:10 }}
                   onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'}
                   onMouseLeave={e=>e.currentTarget.style.background='#ffffff'}
                 >
@@ -155,9 +190,9 @@ export default function Welcome({ onAuthenticated }) {
                     <path fill="#EA4335" d="M12 5.97c1.47 0 2.78.5 3.82 1.5l2.88-2.88C16.96 2.97 14.7 2 12 2a10 10 0 0 0-8.92 5.52l3.34 2.58C7.2 7.73 9.4 5.97 12 5.97z"/>
                   </svg>
                   Continue with Google
-                  <span style={{ marginLeft:4, fontSize:11, color:'#64748b' }}>Dev</span>
+                  {!providers?.google?.configured && <span style={{ marginLeft:4, fontSize:11, color:'#b45309' }}>Setup required</span>}
                 </button>
-                <button id="connect-apple-btn" onClick={() => handleConnect('apple')} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'#05070c', color:'#ffffff', border:'1px solid rgba(255,255,255,0.16)', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:700, cursor:'pointer', transition:'all .2s' }}
+                <button id="connect-apple-btn" onClick={() => handleOAuth('apple')} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'#05070c', color:'#ffffff', border:'1px solid rgba(255,255,255,0.16)', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:700, cursor:'pointer', transition:'all .2s', marginBottom:10 }}
                   onMouseEnter={e=>e.currentTarget.style.background='#111827'}
                   onMouseLeave={e=>e.currentTarget.style.background='#05070c'}
                 >
@@ -165,9 +200,30 @@ export default function Welcome({ onAuthenticated }) {
                     <path d="M16.37 1.51c0 1.18-.48 2.29-1.25 3.14-.8.89-2.12 1.58-3.2 1.49-.15-1.13.42-2.33 1.14-3.12.82-.9 2.22-1.58 3.31-1.51zM20.7 17.34c-.58 1.33-.86 1.93-1.6 3.11-1.04 1.62-2.5 3.64-4.31 3.66-1.6.02-2.02-1.06-4.2-1.04-2.18.01-2.64 1.07-4.24 1.05-1.81-.02-3.2-1.84-4.23-3.46C-.77 16.1-1.07 10.76.7 7.94c1.25-1.99 3.22-3.16 5.08-3.16 1.9 0 3.09 1.04 4.65 1.04 1.52 0 2.44-1.04 4.63-1.04 1.65 0 3.4.9 4.65 2.46-4.08 2.24-3.42 8.07.99 10.1z"/>
                   </svg>
                   Continue with Apple
-                  <span style={{ marginLeft:4, fontSize:11, color:'#94a3b8' }}>Dev</span>
+                  {!providers?.apple?.configured && <span style={{ marginLeft:4, fontSize:11, color:'#fbbf24' }}>Setup required</span>}
                 </button>
                 {phase==='error' && <p style={{ marginTop:10, fontSize:12, color:'#f87171', background:'rgba(239,68,68,.08)', borderRadius:10, padding:'8px 12px' }}>{status}</p>}
+              </div>
+            )}
+
+            {phase==='code' && (
+              <div>
+                <p style={{ fontSize:13, color:'#94a3b8', marginBottom:12, lineHeight:1.6 }}>{status}</p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={code}
+                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="6-digit code"
+                  autoComplete="one-time-code"
+                  style={{ width:'100%', boxSizing:'border-box', letterSpacing:3, textAlign:'center', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:18, fontWeight:800, outline:'none', marginBottom:10 }}
+                />
+                <button id="verify-email-btn" onClick={verifyEmailCode} disabled={code.length !== 6} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'linear-gradient(135deg,#059669,#14b8a6)', color:'#ffffff', border:'none', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:800, cursor:code.length===6?'pointer':'not-allowed', opacity:code.length===6?1:.55, marginBottom:10 }}>
+                  Verify and sign in
+                </button>
+                <button onClick={() => { setPhase('idle'); setCode(''); setStatus('') }} style={{ width:'100%', background:'transparent', color:'#64748b', border:'none', fontSize:12, cursor:'pointer' }}>
+                  Use another email
+                </button>
               </div>
             )}
 

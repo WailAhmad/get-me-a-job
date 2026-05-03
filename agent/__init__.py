@@ -1,4 +1,4 @@
-"""Jobs Land Autonomous Agent.
+"""JobsLand Autonomous Agent.
 
 A standalone Playwright-driven LinkedIn Easy Apply agent. Reads the user's
 profile from data.json (auto-synced from the FastAPI app's state.json),

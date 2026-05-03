@@ -1,5 +1,5 @@
 """
-Lightweight JSON-backed state store for Jobs Land.
+Lightweight JSON-backed state store for JobsLand.
 
 Keeps the app coherent end-to-end without dragging in a full ORM:
 - profile (imported from LinkedIn)
@@ -10,6 +10,7 @@ Keeps the app coherent end-to-end without dragging in a full ORM:
 - automation runtime (running, today/hour counters, last_run)
 """
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -20,10 +21,9 @@ _LOCK = threading.RLock()
 _PATH = Path(DATA_DIR) / "state.json"
 
 DEFAULT: Dict[str, Any] = {
-    # Live vs demo. When true AND a LinkedIn session is saved, the engine drives
-    # a real Selenium browser to search and submit. When false, the engine
-    # generates demo data and never marks anything as `submission_verified`.
-    # Defaults to True so the user gets real results as soon as they connect LinkedIn.
+    # Real automation mode. When true AND a LinkedIn session is saved, the engine
+    # drives a real Selenium browser to search and submit. When false, automation
+    # does not run; no simulated jobs or applications are generated.
     "live_mode": True,
     "profile": {
         "name": None,
@@ -148,7 +148,7 @@ def _load() -> dict:
 
 
 def _save(state: dict) -> None:
-    tmp = _PATH.with_suffix(".tmp")
+    tmp = _PATH.with_name(f"{_PATH.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     with open(tmp, "w") as f:
         json.dump(state, f, indent=2, default=str)
     tmp.replace(_PATH)

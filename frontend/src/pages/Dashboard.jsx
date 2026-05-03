@@ -1,10 +1,101 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getDashboardStats, getAutomationStatus, stopAutomation, startAutomation, clearJobs, getJobs, getLiveMode } from '../api/client'
-import { Briefcase, CheckCircle, Clock, Globe2, Play, Square, Radio, FileText, MessageSquare, AlertTriangle, ShieldAlert, Layers3, Trash2, MinusCircle, ListChecks } from 'lucide-react'
-import AutomationWindow from '../components/AutomationWindow'
+import { CheckCircle, Clock, Globe2, Play, Square, Radio, FileText, MessageSquare, AlertTriangle, Layers3, Trash2, XCircle, Zap, History } from 'lucide-react'
+import AutomationPanel from '../components/AutomationPanel'
 import HourlyChart from '../components/HourlyChart'
 
+/* ── section header ──────────────────────────────────────────────── */
+function SectionLabel({ tag, tagColor, label, sub }) {
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+      <span style={{
+        fontSize:10, fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase',
+        padding:'3px 10px', borderRadius:99,
+        background: `${tagColor}18`, color: tagColor,
+        border: `1px solid ${tagColor}35`,
+      }}>{tag}</span>
+      <span style={{ fontSize:13, fontWeight:600, color:'#cbd5e1' }}>{label}</span>
+      {sub && <span style={{ fontSize:11, color:'#475569' }}>· {sub}</span>}
+    </div>
+  )
+}
+
+/* ── applied card (two sub-tags) ────────────────────────────────── */
+function AppliedCard({ byApp, already, onClick }) {
+  const total = (byApp ?? 0) + (already ?? 0)
+  return (
+    <button onClick={onClick}
+      style={{
+        textAlign:'left', cursor:'pointer', gridColumn:'span 1',
+        background:'linear-gradient(180deg, rgba(16,185,129,0.07), rgba(255,255,255,0.02))',
+        border:'1px solid rgba(16,185,129,0.35)',
+        borderRadius:18, padding:18, position:'relative', overflow:'hidden',
+        transition:'all .2s', width:'100%',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor='rgba(16,185,129,0.6)'; e.currentTarget.style.transform='translateY(-1px)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(16,185,129,0.35)'; e.currentTarget.style.transform='translateY(0)' }}
+    >
+      <div style={{ position:'absolute', right:-14, top:-14, height:60, width:60, borderRadius:'50%', background:'#10b98114', filter:'blur(2px)' }} />
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+        <div style={{ height:32, width:32, borderRadius:10, background:'#10b98118', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <CheckCircle size={15} style={{ color:'#10b981' }} />
+        </div>
+        <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em' }}>Applied</div>
+      </div>
+      <div style={{ fontSize:30, fontWeight:800, color:'#f8fafc', lineHeight:1, marginBottom:10 }}>{total}</div>
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+        <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(16,185,129,0.14)', color:'#34d399', border:'1px solid rgba(16,185,129,0.28)' }}>
+          {byApp ?? 0} by app
+        </span>
+        <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(14,165,233,0.14)', color:'#38bdf8', border:'1px solid rgba(14,165,233,0.28)' }}>
+          {already ?? 0} already applied
+        </span>
+      </div>
+    </button>
+  )
+}
+
+/* ── Easy Apply card (merged with Already Applied) ───────────── */
+function EasyApplyCard({ easyApplyTotal, newApps, already, scanning, onClick }) {
+  const total = (easyApplyTotal ?? 0) + (already ?? 0)
+  return (
+    <button onClick={onClick}
+      style={{
+        textAlign:'left', cursor:'pointer', gridColumn:'span 1',
+        background:'linear-gradient(180deg, rgba(20,184,166,0.08), rgba(255,255,255,0.02))',
+        border:'1px solid rgba(20,184,166,0.35)',
+        borderRadius:18, padding:18, position:'relative', overflow:'hidden',
+        transition:'all .2s', width:'100%',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor='rgba(20,184,166,0.6)'; e.currentTarget.style.transform='translateY(-1px)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(20,184,166,0.35)'; e.currentTarget.style.transform='translateY(0)' }}
+    >
+      <div style={{ position:'absolute', right:-14, top:-14, height:60, width:60, borderRadius:'50%', background:'#14b8a614', filter:'blur(2px)' }} />
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+        <div style={{ height:32, width:32, borderRadius:10, background:'#14b8a618', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <Zap size={15} style={{ color:'#14b8a6' }} />
+        </div>
+        <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em' }}>Easy Apply</div>
+      </div>
+      <div style={{ fontSize:30, fontWeight:800, color:'#f8fafc', lineHeight:1, marginBottom:10 }}>{scanning ? '…' : total}</div>
+      {scanning ? (
+        <div style={{ fontSize:12, color:'#94a3b8' }}>scanning…</div>
+      ) : (
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+          <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(20,184,166,0.14)', color:'#2dd4bf', border:'1px solid rgba(20,184,166,0.28)' }}>
+            {newApps ?? 0} applied this run
+          </span>
+          <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(14,165,233,0.14)', color:'#38bdf8', border:'1px solid rgba(14,165,233,0.28)' }}>
+            {already ?? 0} already applied
+          </span>
+        </div>
+      )}
+    </button>
+  )
+}
+
+/* ── stat card ───────────────────────────────────────────────────── */
 const Card = ({ title, value, sub, icon:Icon, color, onClick, accent }) => (
   <button onClick={onClick}
     style={{
@@ -24,30 +115,66 @@ const Card = ({ title, value, sub, icon:Icon, color, onClick, accent }) => (
       </div>
       <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em' }}>{title}</div>
     </div>
-    <div style={{ fontSize:30, fontWeight:800, color:'#f8fafc', lineHeight:1 }}>{value}</div>
+    <div style={{ fontSize:30, fontWeight:800, color:'#f8fafc', lineHeight:1 }}>{value ?? '—'}</div>
     {sub && <div style={{ fontSize:11, color:'#64748b', marginTop:6 }}>{sub}</div>}
   </button>
 )
+
+const Countdown = ({ targetTime, running }) => {
+  const [remaining, setRemaining] = useState('')
+  useEffect(() => {
+    if (running || !targetTime) return
+    const id = setInterval(() => {
+      const diff = Math.max(0, targetTime - Date.now() / 1000)
+      if (diff === 0) {
+        setRemaining('Starting soon…')
+      } else {
+        const m = Math.floor(diff / 60)
+        const s = Math.floor(diff % 60)
+        setRemaining(`Next run in ${m}m ${s}s`)
+      }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [targetTime, running])
+  
+  if (running) return null
+  if (!targetTime) return null
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', background:'rgba(255,255,255,0.05)', borderRadius:8, border:'1px solid rgba(255,255,255,0.1)' }}>
+      <Clock size={14} color="#94a3b8" />
+      <span style={{ fontSize:13, color:'#94a3b8', fontWeight:600, fontFamily:'monospace' }}>{remaining}</span>
+    </div>
+  )
+}
 
 export default function Dashboard({ cv, prefs, onRefresh }) {
   const navigate = useNavigate()
   const [stats,    setStats]    = useState(null)
   const [jobs,     setJobs]     = useState([])
   const [running,  setRunning]  = useState(false)
+  const [nextRunAt, setNextRunAt] = useState(null)
   const [busy,     setBusy]     = useState(false)
   const [clearing, setClearing] = useState(false)
-  const [showLogs, setShowLogs] = useState(false)
   const [error,    setError]    = useState('')
   const [liveMode, setLiveModeState] = useState({ live_mode:false, linkedin_session:false, effective:false })
 
   const refresh = async () => {
     try { setStats(await getDashboardStats()) } catch {}
-    try { const s = await getAutomationStatus(); setRunning(s?.running ?? false) } catch {}
+    try { 
+      const s = await getAutomationStatus()
+      setRunning(s?.running ?? false)
+      setNextRunAt(s?.next_run_at)
+    } catch {}
     try { setJobs(await getJobs()) } catch {}
     try { setLiveModeState(await getLiveMode()) } catch {}
   }
 
-  useEffect(() => { refresh(); const id = setInterval(refresh, 5000); return () => clearInterval(id) }, [])
+  useEffect(() => {
+    refresh()
+    const interval = running ? 2000 : 5000
+    const id = setInterval(refresh, interval)
+    return () => clearInterval(id)
+  }, [running])
 
   const handleClear = async () => {
     if (!confirm('Clear all discovered jobs and reset counters? Older runs (with stuck pending items) will be wiped so the next run starts clean.')) return
@@ -60,7 +187,7 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
     try {
       const r = await startAutomation()
       if (r.success === false) setError(r.message || 'Could not start')
-      else { setShowLogs(true); setRunning(true) }
+      else setRunning(true)
     } catch (e) {
       setError(e.response?.data?.detail || e.message || 'Could not start automation')
     } finally { setBusy(false) }
@@ -73,7 +200,15 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
 
   const cvOK    = !!cv?.uploaded
   const prefsOK = !!prefs?.ready
-  const canRun  = cvOK && prefsOK
+  const linkedinOK = !!liveMode.linkedin_session
+  const canRun  = cvOK && prefsOK && linkedinOK
+  const setupTarget = !cvOK ? '/cv' : !prefsOK ? '/chat' : '/settings'
+  const setupLabel = !cvOK ? 'Upload CV →' : !prefsOK ? 'Talk to Jobby →' : 'Connect LinkedIn →'
+  const setupTitle = !cvOK
+    ? 'Upload your CV first'
+    : !prefsOK
+      ? 'Talk to Jobby first to set your search preferences'
+      : 'Connect your LinkedIn account in Settings'
 
   return (
     <div className="animate-fade-in">
@@ -83,31 +218,27 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
           <h1 className="page-title">Dashboard</h1>
           <p className="page-subtitle">Your 24/7 LinkedIn application autopilot</p>
         </div>
-        <div style={{ display:'flex', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+          <Countdown targetTime={nextRunAt} running={running} />
           {running ? (
-            <>
-              <button onClick={() => setShowLogs(true)} style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 16px', borderRadius:12, border:'1px solid rgba(56,189,248,0.3)', background:'rgba(56,189,248,0.08)', color:'#38bdf8', fontSize:13, fontWeight:600, cursor:'pointer' }}>
-                <Radio size={13} /> Watch Live
-              </button>
-              <button onClick={handleStop} disabled={busy} style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 16px', borderRadius:12, border:'1px solid rgba(239,68,68,0.25)', background:'rgba(239,68,68,0.07)', color:'#f87171', fontSize:13, fontWeight:600, cursor:'pointer' }}>
-                <Square size={13} /> {busy ? 'Stopping…' : 'Stop'}
-              </button>
-            </>
+            <button onClick={handleStop} disabled={busy} style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 16px', borderRadius:12, border:'1px solid rgba(239,68,68,0.25)', background:'rgba(239,68,68,0.07)', color:'#f87171', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+              <Square size={13} /> {busy ? 'Stopping…' : 'Stop Automation'}
+            </button>
           ) : (
             <button
-              onClick={canRun ? handleStart : () => navigate(cvOK ? '/chat' : '/cv')}
+              onClick={canRun ? handleStart : () => navigate(setupTarget)}
               disabled={busy}
               className="btn-primary"
               style={{ gap:8, opacity: canRun ? 1 : 0.6 }}
-              title={canRun ? '' : (cvOK ? 'Set preferences in AI Assistant' : 'Upload your CV first')}
+              title={canRun ? '' : setupTitle}
             >
-              <Play size={13} /> {canRun ? 'Run Automation' : (cvOK ? 'Set Preferences →' : 'Upload CV →')}
+              <Play size={13} /> {canRun ? 'Run Automation' : setupLabel}
             </button>
           )}
         </div>
       </div>
 
-      {/* Live / demo banner */}
+      {/* Real automation readiness banner */}
       <div onClick={() => navigate('/settings')}
         style={{
           display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:14,
@@ -119,11 +250,11 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
           boxShadow: liveMode.effective ? '0 0 6px #34d399' : 'none', animation: liveMode.effective ? 'pulse 1.6s ease-in-out infinite' : 'none' }} />
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:13, fontWeight:700, color: liveMode.effective ? '#34d399' : '#fbbf24' }}>
-            {liveMode.effective ? 'LIVE MODE — real LinkedIn submissions' : 'DEMO MODE — no real submissions'}
+            {liveMode.effective ? 'LIVE MODE — real LinkedIn submissions' : 'REAL MODE NOT READY'}
           </div>
           <div style={{ fontSize:11, color:'#94a3b8', marginTop:1 }}>
             {liveMode.effective
-              ? 'Automation drives a real Selenium browser using your saved LinkedIn session. Daily cap 100, hourly 10.'
+              ? 'Automation drives a real Selenium browser using your saved LinkedIn session. No limits — applies to all matched jobs.'
               : (liveMode.linkedin_session
                   ? 'Live mode is OFF. Click here to enable real submissions in Settings.'
                   : 'Connect your LinkedIn session in Settings to unlock live mode.')}
@@ -138,7 +269,7 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
         <div style={{ display:'flex', alignItems:'flex-start', gap:0, flexWrap:'wrap' }}>
           {[
             { n:'1', title:'Upload Your CV',           desc:'Drop your CV — we extract skills and years to match jobs semantically.', color:'#3b82f6' },
-            { n:'2', title:'Chat with AI Assistant',   desc:'Set country, recency, and target roles in natural language.',           color:'#14b8a6' },
+            { n:'2', title:'Chat with Jobby',         desc:'Set country, recency, and target roles in natural language.',           color:'#14b8a6' },
             { n:'3', title:'Run Automation',           desc:'We auto-apply to Easy Apply matches and route the rest to External / Pending.',  color:'#a78bfa' },
           ].map((s, i) => (
             <div key={i} style={{ flex:'1 1 220px', display:'flex', alignItems:'flex-start', gap:12, padding:'0 16px', borderRight: i<2 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
@@ -159,10 +290,10 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
             <AlertTriangle size={18} style={{ color:'#f59e0b', flexShrink:0 }} />
             <div>
               <div style={{ fontSize:14, fontWeight:600, color:'#fbbf24' }}>Finish setting up before automation can run</div>
-              <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>Two quick steps stand between you and 24/7 auto-apply.</div>
+              <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>Upload your CV, talk to Jobby, then connect LinkedIn before any automation starts.</div>
             </div>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10 }}>
             <button onClick={() => navigate('/cv')} style={{ textAlign:'left', display:'flex', gap:12, alignItems:'center', padding:14, borderRadius:14, border:`1px solid ${cvOK?'rgba(16,185,129,0.25)':'rgba(59,130,246,0.25)'}`, background:cvOK?'rgba(16,185,129,0.06)':'rgba(59,130,246,0.06)', cursor:'pointer' }}>
               <div style={{ height:36, width:36, borderRadius:10, background: cvOK?'rgba(16,185,129,0.16)':'rgba(59,130,246,0.16)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                 {cvOK ? <CheckCircle size={16} style={{ color:'#34d399' }} /> : <FileText size={16} style={{ color:'#60a5fa' }} />}
@@ -177,8 +308,17 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
                 {prefsOK ? <CheckCircle size={16} style={{ color:'#34d399' }} /> : <MessageSquare size={16} style={{ color:'#2dd4bf' }} />}
               </div>
               <div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>2. {prefsOK ? 'Preferences set' : 'Chat with AI Assistant'}</div>
+                <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>2. {prefsOK ? 'Preferences set' : 'Chat with Jobby'}</div>
                 <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{prefsOK ? `${prefs.country} · last ${prefs.recency_days} days` : 'Country, recency, target roles'}</div>
+              </div>
+            </button>
+            <button onClick={() => navigate('/settings')} disabled={!cvOK || !prefsOK} style={{ textAlign:'left', display:'flex', gap:12, alignItems:'center', padding:14, borderRadius:14, border:`1px solid ${linkedinOK?'rgba(16,185,129,0.25)':'rgba(14,165,233,0.25)'}`, background:linkedinOK?'rgba(16,185,129,0.06)':'rgba(14,165,233,0.06)', cursor:(cvOK&&prefsOK)?'pointer':'not-allowed', opacity:(cvOK&&prefsOK)?1:0.5 }}>
+              <div style={{ height:36, width:36, borderRadius:10, background: linkedinOK?'rgba(16,185,129,0.16)':'rgba(14,165,233,0.16)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                {linkedinOK ? <CheckCircle size={16} style={{ color:'#34d399' }} /> : <Radio size={16} style={{ color:'#38bdf8' }} />}
+              </div>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>3. {linkedinOK ? 'LinkedIn connected' : 'Connect LinkedIn'}</div>
+                <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{linkedinOK ? 'Browser session ready' : 'Required for live job discovery and apply'}</div>
               </div>
             </button>
           </div>
@@ -189,29 +329,30 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
         <div style={{ background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.2)', borderRadius:12, padding:'10px 14px', fontSize:12, color:'#fca5a5', marginBottom:14 }}>{error}</div>
       )}
 
-      {/* Running banner */}
-      {running && (
-        <div style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(16,185,129,.07)', border:'1px solid rgba(16,185,129,.18)', borderRadius:14, padding:'12px 16px', marginBottom:20, cursor:'pointer' }} onClick={() => setShowLogs(true)}>
-          <span style={{ width:8, height:8, borderRadius:'50%', background:'#10b981', boxShadow:'0 0 6px #10b981', animation:'pulse 1.5s ease-in-out infinite', flexShrink:0 }} />
-          <span style={{ fontSize:13, color:'#34d399', flex:1 }}>Automation is running — scanning and applying to LinkedIn jobs</span>
-          <span style={{ fontSize:12, color:'#0ea5e9', fontWeight:600 }}>Watch Live →</span>
-        </div>
-      )}
-
-      {/* Primary cards */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))', gap:14, marginBottom:14 }}>
-        <Card title="Jobs Found"        value={stats?.jobs_found     ?? '—'} sub="total discovered across all sources"  icon={Layers3}    color="#3b82f6" onClick={() => navigate('/jobs')} />
-        <Card title="Verified Applied"  value={stats?.auto_applied   ?? '—'} sub={`${stats?.applied_today ?? 0} today · cap ${stats?.daily_cap ?? 100}/day`} icon={CheckCircle} color="#10b981" accent onClick={() => navigate('/history')} />
-        <Card title="External Jobs"     value={stats?.external_jobs  ?? '—'} sub="not Easy Apply — open & apply manually" icon={Globe2}    color="#a78bfa" onClick={() => navigate('/jobs')} />
-        <Card title="Pending Review"    value={stats?.pending        ?? '—'} sub={`${stats?.pending_questions ?? 0} questions · ${stats?.pending_verify ?? 0} verify`} icon={Clock} color="#f59e0b" onClick={() => navigate('/pending')} />
+      {/* ── LAST RUN section ───────────────────────────────────── */}
+      <SectionLabel tag="Last Run" tagColor="#38bdf8" label="Results from the most recent automation run" />
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(190px,1fr))', gap:12, marginBottom:22 }}>
+        <Card title="Matched Jobs"   value={running && stats?.live_found > 0 ? stats?.live_matched : stats?.last_run_matched} sub={running && stats?.live_found > 0 ? `scanning… ${stats?.live_found ?? 0} found so far` : `${(stats?.last_run_easy_apply ?? 0) + (stats?.last_run_already ?? 0)} easy apply · ${stats?.last_run_external ?? 0} external`} icon={Layers3} color="#3b82f6" onClick={() => navigate('/jobs')} />
+        <EasyApplyCard newApps={stats?.last_run_applied ?? 0} easyApplyTotal={running && stats?.live_found > 0 ? stats?.live_easy_apply : (stats?.last_run_easy_apply ?? 0)} already={stats?.last_run_already ?? 0} scanning={running && stats?.live_found > 0} onClick={() => navigate('/jobs')} />
+        <Card title="External"       value={stats?.last_run_external  } sub="no Easy Apply — open manually"                   icon={Globe2}  color="#a78bfa" onClick={() => navigate('/jobs')} />
+        <Card title="Failed"         value={stats?.last_run_failed    } sub="Easy Apply errored — see Job Explorer for reason" icon={XCircle} color="#ef4444" onClick={() => navigate('/jobs')} />
+        <Card title="Pending Review" value={stats?.last_run_pending   } sub={`${stats?.pending_questions ?? 0} questions · ${stats?.pending_verify ?? 0} to verify`} icon={Clock} color="#f59e0b" onClick={() => navigate('/pending')} />
       </div>
 
-      {/* Secondary cards */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))', gap:14, marginBottom:24 }}>
-        <Card title="Skipped"           value={stats?.skipped        ?? '—'} sub="match score below 60%"                icon={MinusCircle} color="#64748b" onClick={() => navigate('/jobs')} />
-        <Card title="Recorded (unverified)" value={stats?.recorded_applications ?? '—'} sub="legacy actions that still need verification" icon={ShieldAlert} color="#fbbf24" onClick={() => navigate('/history')} />
-        <Card title="Queued"            value={stats?.queued         ?? '—'} sub="discovered, not yet processed"         icon={ListChecks} color="#0ea5e9" onClick={() => navigate('/jobs')} />
-        <Card title="Applied Today"     value={stats?.applied_today  ?? '—'} sub={`this hour: ${stats?.hour_count ?? 0}/${stats?.hourly_cap ?? 10}`} icon={Briefcase} color="#34d399" onClick={() => navigate('/history')} />
+      {/* ── TODAY section ──────────────────────────────────────── */}
+      {/* Order matches Last Run: Jobs Found → Applied → External → Failed → All Time */}
+      <SectionLabel tag="Today" tagColor="#a78bfa" label="Totals across all runs since midnight" />
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(190px,1fr))', gap:12, marginBottom:24 }}>
+        <Card title="Matched Jobs" value={stats?.today_matched} sub={`from ${stats?.today_scanned ?? 0} scanned today`} icon={Layers3}  color="#3b82f6" onClick={() => navigate('/jobs')} />
+        <AppliedCard byApp={stats?.today_applied} already={stats?.already_applied} onClick={() => navigate('/history')} />
+        <Card title="External"    value={stats?.today_external} sub="no Easy Apply — open manually"         icon={Globe2}   color="#a78bfa" onClick={() => navigate('/jobs')} />
+        <Card title="Failed"      value={stats?.today_failed  } sub="apply errors today — see Job Explorer" icon={XCircle}  color="#ef4444" onClick={() => navigate('/jobs')} />
+        <Card title="All Time"    value={stats?.total_all_time} sub={`${stats?.auto_applied ?? 0} applied · ${stats?.applied_this_week ?? 0} this week`} icon={History} color="#64748b" onClick={() => navigate('/history')} />
+      </div>
+
+      {/* ── Inline Automation Log Panel ── */}
+      <div style={{ marginBottom:24 }}>
+        <AutomationPanel running={running} onStop={handleStop} onRefresh={refresh} />
       </div>
 
       {/* Chart */}
@@ -222,12 +363,12 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
       {/* Caps strip */}
       <div className="card" style={{ marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
         <div style={{ fontSize:12, color:'#64748b' }}>
-          <strong style={{ color:'#cbd5e1' }}>This hour:</strong> {stats?.hour_count ?? 0} / {stats?.hourly_cap ?? 10}  &nbsp;·&nbsp;
-          <strong style={{ color:'#cbd5e1' }}>Today:</strong> {stats?.today_count ?? 0} / {stats?.daily_cap ?? 100}
+          <strong style={{ color:'#cbd5e1' }}>This hour:</strong> {stats?.hour_count ?? 0} applied  &nbsp;·&nbsp;
+          <strong style={{ color:'#cbd5e1' }}>Today:</strong> {stats?.today_count ?? 0} applied
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:11, color:'#475569' }}>
-            Max 10 auto-applies per hour · 100 per day · already-applied jobs are remembered.
+            No application caps — already-applied jobs are remembered and skipped.
           </span>
           <button onClick={handleClear} disabled={clearing} title="Wipe discovered jobs and counters"
             style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:10, border:'1px solid rgba(148,163,184,.18)', background:'rgba(148,163,184,.06)', color:'#94a3b8', fontSize:12, cursor:'pointer' }}>
@@ -235,8 +376,6 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
           </button>
         </div>
       </div>
-
-      {showLogs && <AutomationWindow onClose={() => { setShowLogs(false); refresh(); onRefresh && onRefresh() }} alreadyRunning={running} />}
     </div>
   )
 }

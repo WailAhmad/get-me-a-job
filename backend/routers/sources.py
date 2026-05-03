@@ -49,17 +49,20 @@ def connect_source(source_id: str):
     sources = _sources()
     if source_id not in sources:
         raise HTTPException(404, "Unknown job source.")
+    if source_id != "linkedin":
+        raise HTTPException(
+            501,
+            f"{sources[source_id]['name']} is not wired to a real connection flow yet. No fake connector was created.",
+        )
 
     def m(s):
         source = s.setdefault("job_sources", {}).setdefault(source_id, {})
         source["connected"] = True
         source["connected_at"] = time.time()
-        source["mock"] = source_id != "linkedin"
 
     state.update(m)
     source = state.get()["job_sources"][source_id]
-    mode = "LinkedIn browser session" if source_id == "linkedin" else "development connector"
-    return {"success": True, "source": source, "message": f"{source['name']} connected as a {mode}."}
+    return {"success": True, "source": source, "message": f"{source['name']} connected using the real LinkedIn browser session."}
 
 
 @router.delete("/{source_id}")

@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, MessageSquare, FileText, Search, Clock, BookOpen, History, Settings, LogOut } from 'lucide-react'
 import { clearLinkedInSession } from '../api/client'
+import Logo from './Logo'
 
 const nav = [
   { to:'/',         icon:LayoutDashboard, label:'Dashboard'   },
-  { to:'/chat',     icon:MessageSquare,   label:'AI Assistant'},
+  { to:'/chat',     icon:MessageSquare,   label:'Jobby'},
   { to:'/cv',       icon:FileText,        label:'My CV'       },
   { to:'/jobs',     icon:Search,          label:'Job Explorer'},
   { to:'/pending',  icon:Clock,           label:'Pending'     },
@@ -21,7 +22,7 @@ const S = {
   },
   logo: {
     padding:'20px 16px', borderBottom:'1px solid rgba(255,255,255,0.07)',
-    display:'flex', alignItems:'center', gap:10,
+    display:'flex', alignItems:'center', gap:14,
   },
   nav:  { flex:1, overflowY:'auto', padding:'12px 8px' },
   link: { display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:12, fontSize:13, fontWeight:500, textDecoration:'none', color:'#64748b', transition:'all .15s', marginBottom:2 },
@@ -36,8 +37,8 @@ export default function Sidebar({ onLogout, profile, cv, prefs }) {
     if (onLogout) onLogout()
   }
 
-  const name  = profile?.name  || 'You'
-  const title = profile?.title || 'Welcome'
+  const name  = cv?.name || profile?.name || 'Candidate'
+  const title = cv?.seniority ? `${cv.seniority} profile` : (profile?.title || 'Ready to search')
   const photo = profile?.photo
   const initial = name.slice(0,1).toUpperCase()
 
@@ -48,10 +49,12 @@ export default function Sidebar({ onLogout, profile, cv, prefs }) {
   return (
     <aside className="sidebar" style={S.aside}>
       <div className="sidebar-logo" style={S.logo}>
-        <img src="/jobsland_logo.png" alt="Jobs Land" style={{ height:36, width:36, borderRadius:10, flexShrink:0, background:'#fff', objectFit:'contain', padding:2 }} />
-        <div>
-          <div style={{ fontSize:13, fontWeight:700, color:'#f1f5f9', letterSpacing:'.01em' }}>Jobs Land</div>
-          <div style={{ fontSize:11, color:'#475569' }}>Your dream job, guided by AI</div>
+        <Logo height={58} width={54} style={{ borderRadius:16 }} />
+        <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+          <div style={{ fontSize:14, lineHeight:1.28, color:'#64748b', fontWeight:600, letterSpacing:0 }}>
+            Career search,<br />
+            guided by AI
+          </div>
         </div>
       </div>
 
@@ -85,7 +88,7 @@ export default function Sidebar({ onLogout, profile, cv, prefs }) {
             onMouseEnter={e => { e.currentTarget.style.color='#cbd5e1'; e.currentTarget.style.borderColor='rgba(148,163,184,.22)'; e.currentTarget.style.background='rgba(148,163,184,.08)' }}
             onMouseLeave={e => { e.currentTarget.style.color='#64748b'; e.currentTarget.style.borderColor='rgba(255,255,255,0.06)'; e.currentTarget.style.background='rgba(255,255,255,0.03)' }}
           >
-            <LogOut size={12} /> Log out of Jobs Land
+            <LogOut size={12} /> Log out of JobsLand
           </button>
         </div>
       </div>

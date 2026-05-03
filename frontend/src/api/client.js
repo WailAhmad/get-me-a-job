@@ -7,7 +7,7 @@ export const getAllSettings     = ()      => api.get('/settings/').then(r => r.d
 export const updateSetting      = (k, v)  => api.put(`/settings/${k}`, { value: v }).then(r => r.data)
 export const getAIProviders     = ()      => api.get('/settings/ai-providers').then(r => r.data)
 
-// Live / demo mode
+// Real automation mode
 export const getLiveMode        = ()      => api.get('/settings/live-mode').then(r => r.data)
 export const setLiveMode        = (on)    => api.put('/settings/live-mode', { enabled: !!on }).then(r => r.data)
 
@@ -28,10 +28,10 @@ export const clearLinkedInSession     = () => api.delete('/settings/linkedin-ses
 export const getProfile     = () => api.get('/profile/').then(r => r.data)
 export const importProfile  = () => api.post('/profile/import').then(r => r.data)
 export const getProfileStatus = () => api.get('/profile/status').then(r => r.data)
-export const connectProfile = () => api.post('/profile/connect').then(r => r.data)
-export const connectGoogleAccount = () => api.post('/profile/google/connect').then(r => r.data)
-export const connectAppleAccount = () => api.post('/profile/apple/connect').then(r => r.data)
+export const logoutProfile  = () => api.post('/profile/logout').then(r => r.data)
 export const getAuthProviders = () => api.get('/auth/providers').then(r => r.data)
+export const startEmailSignup = (email) => api.post('/auth/email/start', { email }).then(r => r.data)
+export const verifyEmailSignup = (email, code) => api.post('/auth/email/verify', { email, code }).then(r => r.data)
 
 // Job sources
 export const getJobSources = () => api.get('/sources/').then(r => r.data)

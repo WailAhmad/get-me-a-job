@@ -1,40 +1,25 @@
-"""
-Profile router — pulls name / title / photo from the active LinkedIn session.
-
-Falls back to a sensible default for Wael so the UI is always populated;
-when a real Selenium session is connected, we extract the live profile.
-"""
+"""Profile router — app account/session and live LinkedIn profile import."""
 import logging
 import time
 from typing import Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from backend import state
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/profile", tags=["profile"])
 
-DEFAULT_PROFILE = {
-    "name": "Wael Ahmad",
-    "title": "AI & Data Leader",
-    "photo": "/avatar_wael.png",
-}
-
-DEFAULT_GOOGLE_PROFILE = {
-    "name": "Wael Ahmad",
-    "title": "Google account connected",
-    "photo": "/avatar_wael.png",
-}
-
-DEFAULT_APPLE_PROFILE = {
-    "name": "Wael Ahmad",
-    "title": "Apple account connected",
-    "photo": "/avatar_wael.png",
-}
-
-
 def _is_placeholder_profile(profile: dict) -> bool:
     name = (profile.get("name") or "").strip().lower()
-    return not name or name in {"you", "join linkedin", "linkedin"}
+    title = (profile.get("title") or "").strip().lower()
+    photo = (profile.get("photo") or "").strip()
+    if not name or name in {"you", "join linkedin", "linkedin"}:
+        return True
+    if name == "wael ahmad" and (
+        photo == "/photos/wael_avatar.png"
+        or title in {"ai & data leader", "google account connected", "apple account connected"}
+    ):
+        return True
+    return False
 
 
 def _extract_via_selenium() -> Optional[dict]:
@@ -96,88 +81,48 @@ def _extract_via_selenium() -> Optional[dict]:
 def get_profile():
     s = state.get()
     p = s["profile"]
-    if not _is_placeholder_profile(p):
-        return p
-    return {**DEFAULT_PROFILE, "imported_at": None}
+    if _is_placeholder_profile(p) and p.get("connection_type") != "local":
+        return {"name": None, "title": None, "photo": None, "imported_at": None}
+    return p
 
 
 @router.get("/status")
 def profile_status():
     p = state.get()["profile"]
-    connected = bool(p.get("imported_at")) and not _is_placeholder_profile(p)
+    connected = bool(p.get("imported_at")) and p.get("connection_type") != "local" and not _is_placeholder_profile(p)
     return {"connected": connected, "profile": p if connected else None}
+
+
+@router.post("/logout")
+def logout():
+    """Clear the profile session so the user must sign in again."""
+    def m(s):
+        s["profile"] = {"name": None, "title": None, "photo": None, "imported_at": None}
+    state.update(m)
+    return {"success": True}
 
 
 @router.post("/connect")
 def connect_profile():
-    """
-    Profile-only sign-in gate.
-
-    This deliberately does not create a LinkedIn automation browser session.
-    It lets onboarding proceed before CV upload, while Settings can later connect
-    the separate automation session needed for job browsing/applying.
-    """
-    current = state.get()["profile"]
-    profile = current if not _is_placeholder_profile(current) else DEFAULT_PROFILE
-
-    def m(s):
-        s["profile"] = {**profile, "imported_at": time.time(), "connection_type": "profile"}
-
-    state.update(m)
-    return {"success": True, "profile": state.get()["profile"]}
+    raise HTTPException(410, "Local workspace sign-in was removed. Use email verification or configured OAuth.")
 
 
 @router.post("/google/connect")
 def connect_google_profile():
-    """
-    Profile-only Google sign-in gate.
-
-    This creates the app account/session for onboarding. In production this is
-    where Google OAuth would exchange an authorization code and store the
-    Google profile name/photo/email.
-    """
-    current = state.get()["profile"]
-    profile = current if not _is_placeholder_profile(current) else DEFAULT_GOOGLE_PROFILE
-
-    def m(s):
-        s["profile"] = {
-            **profile,
-            "imported_at": time.time(),
-            "connection_type": "google",
-            "auth_provider": "google",
-        }
-
-    state.update(m)
-    return {"success": True, "profile": state.get()["profile"]}
+    raise HTTPException(410, "Mock Google sign-in was removed. Use /api/auth/google/start with real OAuth credentials.")
 
 
 @router.post("/apple/connect")
 def connect_apple_profile():
-    """
-    Profile-only Apple sign-in gate.
-
-    In production this is where Sign in with Apple would validate the identity
-    token and store the user's Apple profile/email.
-    """
-    current = state.get()["profile"]
-    profile = current if not _is_placeholder_profile(current) else DEFAULT_APPLE_PROFILE
-
-    def m(s):
-        s["profile"] = {
-            **profile,
-            "imported_at": time.time(),
-            "connection_type": "apple",
-            "auth_provider": "apple",
-        }
-
-    state.update(m)
-    return {"success": True, "profile": state.get()["profile"]}
+    raise HTTPException(410, "Mock Apple sign-in was removed. Use /api/auth/apple/start with real OAuth credentials.")
 
 
 @router.post("/import")
 def import_profile():
     """Called right after LinkedIn auth to import name/title/photo."""
-    extracted = _extract_via_selenium() or DEFAULT_PROFILE
+    extracted = _extract_via_selenium()
+    if not extracted:
+        raise HTTPException(409, "Could not import a real LinkedIn profile. Connect and verify LinkedIn in Settings first.")
     def m(s):
         s["profile"] = {
             **s.get("profile", {}),

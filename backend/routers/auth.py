@@ -5,8 +5,15 @@ These routes do not fake a successful login. If provider credentials are not
 configured, they return a clear setup error.
 """
 import base64
+import hashlib
+import hmac
 import json
+import re
 import secrets
+import smtplib
+import time
+from email.message import EmailMessage
+from email.utils import formataddr
 from urllib.parse import urlencode
 
 import httpx
@@ -22,9 +29,43 @@ from backend.config import (
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
     GOOGLE_REDIRECT_URI,
+    SMTP_FROM_EMAIL,
+    SMTP_FROM_NAME,
+    SMTP_HOST,
+    SMTP_PASSWORD,
+    SMTP_PORT,
+    SMTP_PROVIDER,
+    SMTP_USERNAME,
+    SMTP2GO_API_BASE_URL,
+    SMTP2GO_API_KEY,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL_CODE_TTL_SECONDS = 10 * 60
+
+
+def _smtp_configured() -> bool:
+    if SMTP_PROVIDER == "smtp2go" and SMTP2GO_API_KEY and SMTP_FROM_EMAIL:
+        return True
+    return bool(SMTP_HOST and SMTP_PORT and SMTP_USERNAME and SMTP_PASSWORD and SMTP_FROM_EMAIL)
+
+
+def _missing_smtp() -> list[str]:
+    return [k for k, v in {
+        "SMTP_FROM_EMAIL": SMTP_FROM_EMAIL,
+        **(
+            {"SMTP2GO_API_KEY": SMTP2GO_API_KEY}
+            if SMTP_PROVIDER == "smtp2go"
+            else {
+                "SMTP_HOST": SMTP_HOST,
+                "SMTP_PORT": SMTP_PORT,
+                "SMTP_USERNAME": SMTP_USERNAME,
+                "SMTP_PASSWORD": SMTP_PASSWORD,
+            }
+        ),
+    }.items() if not v]
 
 
 def _frontend_redirect(path: str = "/", **params):
@@ -56,6 +97,88 @@ def _save_profile(profile: dict):
     state.update(m)
 
 
+def _hash_code(email: str, code: str) -> str:
+    secret = SMTP_PASSWORD or GOOGLE_CLIENT_SECRET or APPLE_CLIENT_SECRET or "jobsland-local-secret"
+    msg = f"{email.lower()}:{code}".encode()
+    return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
+
+
+def _send_email_code(email: str, code: str) -> None:
+    if not _smtp_configured():
+        raise HTTPException(
+            501,
+            "Email sign-up is not configured. JobsLand is preset for SMTP2GO. Add SMTP2GO_API_KEY and SMTP_FROM_EMAIL to backend .env.",
+        )
+
+    subject = "Your JobsLand verification code"
+    text_body = (
+        "Your JobsLand verification code is:\n\n"
+        f"{code}\n\n"
+        "This code expires in 10 minutes. If you did not request it, you can ignore this email.\n"
+    )
+
+    if SMTP_PROVIDER == "smtp2go" and SMTP2GO_API_KEY:
+        try:
+            resp = httpx.post(
+                f"{SMTP2GO_API_BASE_URL.rstrip('/')}/email/send",
+                headers={
+                    "Content-Type": "application/json",
+                    "accept": "application/json",
+                    "X-Smtp2go-Api-Key": SMTP2GO_API_KEY,
+                },
+                json={
+                    "sender": SMTP_FROM_EMAIL,
+                    "to": [email],
+                    "subject": subject,
+                    "text_body": text_body,
+                },
+                timeout=20,
+            )
+            payload = resp.json() if resp.content else {}
+            if resp.status_code >= 400:
+                detail = payload.get("data", {}).get("error") or payload.get("error") or resp.text
+                raise HTTPException(502, f"SMTP2GO API send failed: {detail}")
+            data = payload.get("data") or {}
+            if int(data.get("failed") or 0) > 0:
+                failures = data.get("failures") or []
+                raise HTTPException(502, f"SMTP2GO API rejected the message: {failures}")
+            if int(data.get("succeeded") or 0) < 1:
+                raise HTTPException(502, f"SMTP2GO API did not confirm delivery: {payload}")
+            return
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(502, f"SMTP2GO API send failed: {exc}")
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr((SMTP_FROM_NAME or "JobsLand", SMTP_FROM_EMAIL))
+    msg["To"] = email
+    msg.set_content(text_body)
+
+    try:
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+                smtp.ehlo()
+                smtp.starttls()
+                smtp.ehlo()
+                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                smtp.send_message(msg)
+    except smtplib.SMTPAuthenticationError:
+        raise HTTPException(
+            502,
+            "SMTP2GO rejected the SMTP credentials. Use the username/password from Sending > SMTP Users, not the SMTP2GO dashboard login password.",
+        )
+    except smtplib.SMTPException as exc:
+        raise HTTPException(502, f"SMTP2GO send failed: {exc}")
+    except OSError as exc:
+        raise HTTPException(502, f"Could not connect to SMTP2GO at {SMTP_HOST}:{SMTP_PORT}: {exc}")
+
+
 def _decode_jwt_payload(token: str) -> dict:
     try:
         payload = token.split(".")[1]
@@ -82,7 +205,82 @@ def providers():
                 "APPLE_CLIENT_SECRET": APPLE_CLIENT_SECRET,
             }.items() if not v],
         },
+        "email": {
+            "configured": _smtp_configured(),
+            "missing": _missing_smtp(),
+            "provider": SMTP_PROVIDER,
+            "host": SMTP_HOST,
+            "port": SMTP_PORT,
+            "api_configured": bool(SMTP2GO_API_KEY),
+            "detail": "SMTP2GO is selected by default. Add SMTP2GO_API_KEY plus a verified SMTP_FROM_EMAIL, or use SMTP username/password fallback.",
+        },
     }
+
+
+@router.post("/email/start")
+def email_start(body: dict):
+    email = (body.get("email") or "").strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(400, "Enter a valid email address.")
+
+    now = time.time()
+    existing = state.get().get("email_auth", {})
+    if existing.get("email") == email and now - float(existing.get("sent_at") or 0) < 45:
+        raise HTTPException(429, "Please wait a moment before requesting another code.")
+
+    code = f"{secrets.randbelow(1000000):06d}"
+    _send_email_code(email, code)
+
+    def m(s):
+        s["email_auth"] = {
+            "email": email,
+            "code_hash": _hash_code(email, code),
+            "sent_at": now,
+            "expires_at": now + EMAIL_CODE_TTL_SECONDS,
+            "attempts": 0,
+        }
+
+    state.update(m)
+    return {"success": True, "message": "Verification code sent."}
+
+
+@router.post("/email/verify")
+def email_verify(body: dict):
+    email = (body.get("email") or "").strip().lower()
+    code = re.sub(r"\D", "", str(body.get("code") or ""))
+    pending = state.get().get("email_auth") or {}
+
+    if not email or not code:
+        raise HTTPException(400, "Email and verification code are required.")
+    if pending.get("email") != email:
+        raise HTTPException(400, "No verification code is active for this email.")
+    if time.time() > float(pending.get("expires_at") or 0):
+        raise HTTPException(400, "Verification code expired. Request a new code.")
+    if int(pending.get("attempts") or 0) >= 5:
+        raise HTTPException(429, "Too many incorrect attempts. Request a new code.")
+
+    if not hmac.compare_digest(pending.get("code_hash") or "", _hash_code(email, code)):
+        def bump(s):
+            s.setdefault("email_auth", {})["attempts"] = int(pending.get("attempts") or 0) + 1
+        state.update(bump)
+        raise HTTPException(400, "Incorrect verification code.")
+
+    display_name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
+    _save_profile({
+        "name": display_name,
+        "title": email,
+        "email": email,
+        "photo": None,
+        "imported_at": time.time(),
+        "connection_type": "email",
+        "auth_provider": "email",
+        "email_verified": True,
+    })
+
+    def clear(s):
+        s.pop("email_auth", None)
+    state.update(clear)
+    return {"success": True, "profile": state.get()["profile"]}
 
 
 @router.get("/google/start")

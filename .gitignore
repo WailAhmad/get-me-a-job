@@ -20,9 +20,16 @@ data/stealth_check.png
 agent/data.json
 agent/__pycache__/
 
+# Logs & PIDs
+logs/
+*.pid
+*.log
+
 # OS
 .DS_Store
-*.log
 
 # Environment
 .env
+
+# User photos / avatars
+frontend/public/photos/

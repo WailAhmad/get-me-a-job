@@ -54,12 +54,17 @@ def list_jobs():
 
 @router.get("/applied")
 def applied():
-    return _by_status("applied")
+    items = [j for j in _items() if j.get("status") in ("applied", "already_applied")]
+    items.sort(
+        key=lambda j: (j.get("applied_at") or j.get("discovered_at") or 0, j.get("score", 0)),
+        reverse=True,
+    )
+    return items
 
 
 @router.get("/applications")
 def applications():
-    return _by_status("applied")
+    return applied()
 
 
 @router.get("/pending")

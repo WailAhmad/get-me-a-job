@@ -137,6 +137,23 @@ def _make_driver(headless: bool = True):
     return driver
 
 
+def _cleanup_driver(driver) -> None:
+    """Close Chrome and remove its temporary profile copy."""
+    if not driver:
+        return
+    tmp = getattr(driver, '_temp_profile_dir', None)
+    try:
+        driver.quit()
+    except Exception:
+        pass
+    if tmp:
+        try:
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+        except Exception:
+            pass
+
+
 def _build_search_url(keywords: str, country: str, days: int, start: int = 0) -> str:
     params = {
         "keywords": keywords or "",
@@ -212,11 +229,34 @@ def _extract_card(card, By) -> Optional[dict]:
             ".artdeco-entity-lockup__title a",
             ".artdeco-entity-lockup__title",
             "a.job-card-container__link",
+            # 2025/2026 LinkedIn DOM updates
+            ".job-card-list__title--link span",
+            ".job-card-container__link span",
+            ".scaffold-layout__list-item a[href*='/jobs/view/'] span",
+            "a[href*='/jobs/view/'] span",
+            "a[href*='/jobs/view/']",
             "h3 a",
             "h3",
-            "a[href*='/jobs/view/']",
             "strong",
         ])
+
+        # Fallback: extract from full card text (first meaningful line = title)
+        if not title or title.lower() in ("", "unknown role"):
+            try:
+                full_text = (card.text or "").strip()
+                lines = [l.strip() for l in full_text.split("\n") if l.strip()]
+                # Skip lines that are clearly not titles
+                skip_patterns = ["easy apply", "promoted", "ago", "applicant", "actively recruiting"]
+                for line in lines:
+                    ll = line.lower()
+                    if any(sp in ll for sp in skip_patterns):
+                        continue
+                    if len(line) > 3 and len(line) < 120:
+                        title = line
+                        break
+            except Exception:
+                pass
+
         # LinkedIn sometimes prefixes a screen-reader "Job - " label and
         # appends badge text like "with verification"
         title = re.sub(r"^(job\s*-\s*)", "", title, flags=re.I).strip()
@@ -230,7 +270,30 @@ def _extract_card(card, By) -> Optional[dict]:
             ".artdeco-entity-lockup__subtitle span",
             "[data-test-job-card-company-name]",
             ".topcard__flavor",
+            # 2025/2026 fallbacks
+            ".job-card-list__company-name",
+            ".artdeco-entity-lockup__subtitle a",
         ])
+
+        # Company fallback: try second text line if no selector matched
+        if not company or company.lower() in ("", "unknown company"):
+            try:
+                full_text = (card.text or "").strip()
+                lines = [l.strip() for l in full_text.split("\n") if l.strip()]
+                skip_patterns = ["easy apply", "promoted", "ago", "applicant", "actively recruiting"]
+                found_title = False
+                for line in lines:
+                    ll = line.lower()
+                    if any(sp in ll for sp in skip_patterns):
+                        continue
+                    if not found_title:
+                        found_title = True
+                        continue  # skip title line, take the next
+                    if len(line) > 1 and len(line) < 80:
+                        company = line
+                        break
+            except Exception:
+                pass
 
         location = _safe_text(card, By, [
             ".job-card-container__metadata-wrapper",
@@ -268,12 +331,22 @@ def _extract_card(card, By) -> Optional[dict]:
         except Exception:
             pass
 
+        # Detect if user already applied (LinkedIn shows "Applied" badge)
+        already_applied = False
+        try:
+            blob = (card.text or "").lower()
+            if re.search(r"\bapplied\b", blob) and "easy apply" not in blob.split("applied")[0][-20:]:
+                already_applied = True
+        except Exception:
+            pass
+
         return {
             "id": str(job_id),
             "title": title or "Unknown role",
             "company": company or "Unknown company",
             "location": location or "Unknown",
             "easy_apply": easy,
+            "already_applied": already_applied,
             "url": f"https://www.linkedin.com/jobs/view/{job_id}/",
             "url_verified": True,
             "submission_verified": False,
@@ -288,14 +361,17 @@ def _extract_card(card, By) -> Optional[dict]:
 
 
 def search_jobs(keywords: str, country: str, recency_days: int,
-                max_results: int = 25, headless: bool = True) -> List[dict]:
+                max_results: int = 25, headless: bool = True, driver=None,
+                on_progress=None) -> List[dict]:
     """Run a single LinkedIn jobs search and return up to `max_results` real jobs."""
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.common.exceptions import TimeoutException
 
-    driver = _make_driver(headless=headless)
+    own_driver = driver is None
+    if own_driver:
+        driver = _make_driver(headless=headless)
     found: List[dict] = []
     seen_ids = set()
     try:
@@ -350,6 +426,10 @@ def search_jobs(keywords: str, country: str, recency_days: int,
                 page_added += 1
                 if len(found) >= max_results:
                     break
+            
+            if on_progress:
+                on_progress(len(found), keywords, country)
+            
             if page_added == 0:
                 logger.info("Page returned 0 new cards — stopping")
                 break
@@ -357,38 +437,45 @@ def search_jobs(keywords: str, country: str, recency_days: int,
                 break
         return found
     finally:
-        try: driver.quit()
-        except Exception: pass
-        # Clean up temp profile
-        try:
-            import shutil
-            tmp = getattr(driver, '_temp_profile_dir', None)
-            if tmp:
-                shutil.rmtree(tmp, ignore_errors=True)
-        except Exception: pass
+        if own_driver:
+            _cleanup_driver(driver)
 
 
 def search_jobs_multi(keywords_list: List[str], countries: List[str],
                       recency_days: int, max_per_combo: int = 12,
-                      hard_cap: int = 80, headless: bool = True) -> List[dict]:
+                      hard_cap: int = 80, headless: bool = True,
+                      on_progress=None) -> List[dict]:
     """Run one search per (keyword × country), dedupe by job id."""
     seen: dict = {}
     keywords_list = [k.strip() for k in (keywords_list or []) if k and k.strip()] or [""]
     countries = [c.strip() for c in (countries or []) if c and c.strip()] or ["UAE"]
-    for kw in keywords_list:
-        for country in countries:
-            if len(seen) >= hard_cap:
-                return list(seen.values())
-            try:
-                results = search_jobs(kw, country, recency_days,
-                                      max_results=max_per_combo, headless=headless)
-                for r in results:
-                    seen[r["id"]] = r
-                    if len(seen) >= hard_cap:
-                        return list(seen.values())
-            except PermissionError:
-                # Bubble up — the engine should treat as auth failure.
-                raise
-            except Exception as exc:
-                logger.exception("search_jobs failed for %r @ %r: %s", kw, country, exc)
-    return list(seen.values())
+    total_combos = len(keywords_list) * len(countries)
+    combo_idx = 0
+    driver = _make_driver(headless=headless)
+    try:
+        for kw in keywords_list:
+            for country in countries:
+                combo_idx += 1
+                if len(seen) >= hard_cap:
+                    return list(seen.values())
+                if on_progress:
+                    on_progress("searching", kw, country, combo_idx, total_combos, len(seen))
+                try:
+                    results = search_jobs(kw, country, recency_days,
+                                          max_results=max_per_combo, headless=headless,
+                                          driver=driver)
+                    for r in results:
+                        seen[r["id"]] = r
+                        if len(seen) >= hard_cap:
+                            return list(seen.values())
+                    if on_progress:
+                        on_progress("batch_done", kw, country, combo_idx, total_combos, len(seen))
+                except PermissionError:
+                    raise
+                except Exception as exc:
+                    logger.exception("search_jobs failed for %r @ %r: %s", kw, country, exc)
+                    if on_progress:
+                        on_progress("error", kw, country, combo_idx, total_combos, len(seen))
+        return list(seen.values())
+    finally:
+        _cleanup_driver(driver)

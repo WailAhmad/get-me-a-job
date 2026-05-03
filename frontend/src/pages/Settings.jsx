@@ -199,13 +199,13 @@ export default function Settings({ onDisconnect }) {
             <Zap size={16} style={{ color: liveMode.effective ? '#34d399' : '#fbbf24' }} />
             <span style={{ fontSize:14, fontWeight:700, color:'#f1f5f9' }}>Live Mode</span>
             <span className={`badge ${liveMode.effective?'badge-green':'badge-amber'}`} style={{ marginLeft:'auto' }}>
-              {liveMode.effective ? 'LIVE — real submissions' : 'DEMO — no real submissions'}
+              {liveMode.effective ? 'LIVE — real submissions' : 'REAL MODE OFF'}
             </span>
           </div>
           <p style={{ fontSize:12, color:'#94a3b8', lineHeight:1.55 }}>
-            When live mode is on, the automation engine drives a real Selenium browser using your saved LinkedIn session
-            to search jobs and submit Easy Apply forms. When off, it generates a demo preview without contacting LinkedIn.
-            Live mode requires a connected LinkedIn session.
+            The automation engine drives a real Selenium browser using your saved LinkedIn session
+            to search jobs and submit Easy Apply forms. When real mode is off or LinkedIn is not connected,
+            automation will not run and no simulated jobs or applications are generated.
           </p>
 
           {!liveMode.linkedin_session && (
@@ -259,7 +259,7 @@ export default function Settings({ onDisconnect }) {
 
           {session?.has_session && (
             <button onClick={disconnect} style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 16px', borderRadius:12, border:'1px solid rgba(255,255,255,.08)', background:'rgba(255,255,255,.04)', color:'#94a3b8', fontSize:13, fontWeight:500, cursor:'pointer', width:'fit-content' }}>
-              <LogOut size={13} /> Log out of Jobs Land
+              <LogOut size={13} /> Log out of JobsLand
             </button>
           )}
 
@@ -274,7 +274,7 @@ export default function Settings({ onDisconnect }) {
                 <span style={{ fontSize:14, fontWeight:700, color:'#f1f5f9' }}>Job Sources</span>
               </div>
               <p style={{ fontSize:12, color:'#64748b', lineHeight:1.5 }}>
-                Connect the boards the agent should search. LinkedIn is required for profile sync and LinkedIn Easy Apply; the other boards are staged as development connectors until their site-specific browser flows are wired in.
+                Connect the boards the agent should search. LinkedIn is required for profile sync and LinkedIn Easy Apply. Other boards stay unavailable until their real site-specific flows are implemented.
               </p>
             </div>
             <span className="badge badge-blue" style={{ whiteSpace:'nowrap' }}>
@@ -310,7 +310,6 @@ export default function Settings({ onDisconnect }) {
                   {(source.capabilities || []).map(cap => (
                     <span key={cap} className="badge badge-blue" style={{ fontSize:10, padding:'2px 8px' }}>{cap}</span>
                   ))}
-                  {source.mock && <span className="badge badge-amber" style={{ fontSize:10, padding:'2px 8px' }}>Dev connector</span>}
                 </div>
 
                 <div style={{ display:'flex', gap:8, marginTop:'auto' }}>

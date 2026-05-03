@@ -52,7 +52,7 @@ def set_live_mode(body: dict):
         "live_mode": enabled,
         "effective": enabled and has_session,
         "message": "Live mode is ON — automation will now submit real LinkedIn applications." if enabled
-                   else "Live mode is OFF — automation runs in demo mode only.",
+                   else "Live mode is OFF — automation will not run until real mode is enabled.",
     }
 
 

@@ -152,7 +152,7 @@ async def cmd_search_only(max_results: int, score: bool) -> int:
 
 # ── Mode: default boot stub ───────────────────────────────────────────
 async def cmd_boot() -> int:
-    log.info("Jobs Land Agent v0.1 booting")
+    log.info("JobsLand Agent v0.1 booting")
     log.info("data dir = %s", config.DATA_DIR)
     log.info("CDP port = %d", config.CDP_PORT)
 

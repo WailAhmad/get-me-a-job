@@ -1,7 +1,7 @@
 """
 Chat router — guided AI assistant for capturing search preferences.
 
-Flow (scripted, deterministic so the demo always works):
+Flow:
   greet → country → recency → roles → confirm → ready
 
 When the conversation reaches `ready`, preferences are committed to state
@@ -27,14 +27,48 @@ class ChatIn(BaseModel):
 
 
 GCC_COUNTRIES = ["UAE", "Saudi Arabia", "Qatar", "Kuwait", "Bahrain", "Oman"]
-COUNTRIES = ["GCC", "UAE", "Saudi Arabia", "Qatar", "Kuwait", "Bahrain", "Oman", "Egypt", "Jordan",
-             "United Kingdom", "United States", "Germany", "Singapore", "Remote"]
+EUROPE_COUNTRIES = [
+    "United Kingdom", "Ireland", "Germany", "Netherlands", "France", "Spain",
+    "Italy", "Switzerland", "Sweden", "Denmark", "Belgium", "Poland",
+]
+COUNTRIES = [
+    "GCC", "Europe", "UAE", "Saudi Arabia", "Qatar", "Kuwait", "Bahrain", "Oman",
+    "Egypt", "Jordan", "United Kingdom", "Ireland", "United States", "Germany",
+    "Netherlands", "France", "Spain", "Italy", "Switzerland", "Singapore", "Remote",
+]
+
+
+def _dedupe(seq: List[str]) -> List[str]:
+    out = []
+    seen = set()
+    for item in seq:
+        key = item.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(item)
+    return out
 
 
 def _parse_country(text: str) -> Optional[str]:
+    payload = _parse_country_payload(text)
+    if payload:
+        return payload["country"]
+    return None
+
+
+def _parse_country_payload(text: str) -> Optional[dict]:
     t = text.lower()
+    groups: List[str] = []
+    countries: List[str] = []
+
+    if any(k in t for k in ("gcc", "gulf", "middle east", "mena")):
+        groups.append("GCC")
+        countries.extend(GCC_COUNTRIES)
+    if any(k in t for k in ("europe", "european", "e.u.")) or re.search(r"\beu\b", t):
+        groups.append("Europe")
+        countries.extend(EUROPE_COUNTRIES)
+
     map_ = {
-        "gcc": "GCC", "gulf": "GCC", "middle east": "GCC", "mena": "GCC",
         "uae": "UAE", "emirates": "UAE", "dubai": "UAE", "abu dhabi": "UAE",
         "saudi": "Saudi Arabia", "ksa": "Saudi Arabia", "riyadh": "Saudi Arabia", "jeddah": "Saudi Arabia",
         "qatar": "Qatar", "doha": "Qatar",
@@ -42,20 +76,39 @@ def _parse_country(text: str) -> Optional[str]:
         "egypt": "Egypt", "cairo": "Egypt",
         "jordan": "Jordan", "amman": "Jordan",
         "uk": "United Kingdom", "england": "United Kingdom", "london": "United Kingdom",
+        "ireland": "Ireland", "dublin": "Ireland",
         "us ": "United States", "usa": "United States", "america": "United States",
         "germany": "Germany", "berlin": "Germany",
+        "netherlands": "Netherlands", "amsterdam": "Netherlands",
+        "france": "France", "paris": "France",
+        "spain": "Spain", "madrid": "Spain",
+        "italy": "Italy", "milan": "Italy", "rome": "Italy",
+        "switzerland": "Switzerland", "zurich": "Switzerland",
+        "sweden": "Sweden", "stockholm": "Sweden",
         "singapore": "Singapore",
         "remote": "Remote", "anywhere": "Remote",
     }
     for k, v in map_.items():
-        if k in t:
-            return v
-    return None
+        if re.search(rf"\b{re.escape(k)}\b", t):
+            countries.append(v)
+
+    countries = _dedupe(countries)
+    if not countries:
+        return None
+    label = " + ".join(groups) if groups else countries[0]
+    if groups and any(c not in GCC_COUNTRIES + EUROPE_COUNTRIES for c in countries):
+        label = label + " + Other"
+    return {"country": label, "countries": countries, "locations": countries}
 
 
 def _country_payload(country: str) -> dict:
     if country == "GCC":
         return {"country": "GCC", "countries": GCC_COUNTRIES, "locations": GCC_COUNTRIES}
+    if country == "Europe":
+        return {"country": "Europe", "countries": EUROPE_COUNTRIES, "locations": EUROPE_COUNTRIES}
+    if country in {"GCC + Europe", "Europe + GCC"}:
+        countries = _dedupe(GCC_COUNTRIES + EUROPE_COUNTRIES)
+        return {"country": "GCC + Europe", "countries": countries, "locations": countries}
     return {"country": country, "countries": [country], "locations": [country]}
 
 
@@ -74,22 +127,105 @@ def _parse_recency(text: str) -> Optional[int]:
     return None
 
 
-def _parse_roles(text: str) -> List[str]:
-    t = text.lower()
-    if any(phrase in t for phrase in ("all jobs", "any jobs", "based on my cv", "match my cv", "for me")):
+AI_DATA_ROLES = {
+    "head of ai", "head of data", "ai director", "chief data officer",
+    "ai product", "ai platform", "ai architect", "data governance",
+    "digital transformation", "machine learning director",
+}
+
+
+def _cv_role_defaults(cv: dict) -> List[str]:
+    blob = " ".join([
+        cv.get("summary") or "",
+        cv.get("seniority") or "",
+        " ".join(cv.get("skills") or []),
+    ]).lower()
+    if any(term in blob for term in ("billing", "invoice", "invoicing", "accounts receivable", "collections")):
         return [
-            "AI & Data Leadership",
-            "Data & AI Product",
-            "AI Platform",
-            "AI Solutions Architecture",
+            "Billing Analyst",
+            "Senior Billing Analyst",
+            "Billing Specialist",
+            "Accounts Receivable Analyst",
+            "Invoicing Specialist",
+            "Revenue Cycle Analyst",
+            "Collections Analyst",
+            "Finance Operations Analyst",
+        ]
+    if any(term in blob for term in ("accounting", "finance", "financial")):
+        return ["Finance Analyst", "Accounting Analyst", "Accounts Receivable Analyst", "Billing Analyst"]
+    if any(term in blob for term in ("ai", "machine learning", "data governance", "data science", "llm")):
+        return [
+            "Head of AI",
+            "Head of Data",
+            "AI Director",
+            "Chief Data Officer",
+            "AI Product",
             "Data Governance",
             "Digital Transformation",
-            "AI Automation",
-            "Machine Learning Leadership",
+            "AI Platform",
         ]
+    return ["Analyst", "Senior Analyst", "Operations Analyst", "Business Analyst"]
+
+
+def _cv_supports_ai_data(cv: dict) -> bool:
+    skills = {str(s).lower() for s in (cv.get("skills") or [])}
+    blob = " ".join([cv.get("summary") or "", " ".join(skills)]).lower()
+    if skills & {"ai", "machine learning", "data science", "data governance", "llm", "scala", "databricks"}:
+        return True
+    return any(term in blob for term in (
+        " ai ", "artificial intelligence", "machine learning", "data science",
+        "data governance", "llm", "python", "scala", "databricks"
+    ))
+
+
+def _sanitize_roles(roles: List[str], cv: dict, user_msg: str = "") -> List[str]:
+    explicit_ai = any(term in (user_msg or "").lower() for term in (
+        " ai ", "artificial intelligence", "machine learning", "data science", "data governance"
+    ))
+    if _cv_supports_ai_data(cv) or explicit_ai:
+        return roles[:8]
+    cleaned = [r for r in roles if r.strip().lower() not in AI_DATA_ROLES and not r.strip().lower().startswith("ai ")]
+    return cleaned[:8] or _cv_role_defaults(cv)
+
+
+def _parse_roles(text: str, cv: dict | None = None) -> List[str]:
+    t = text.lower()
+    cv = cv or {}
+
+    # Catch broad domain-level requests
+    domain_phrases = [
+        "all jobs", "any jobs", "based on my cv", "match my cv", "for me",
+        "ai domain", "data domain", "ai & data", "data & ai",
+        "ai field", "data field", "ai area", "data area",
+        "ai and data", "data and ai", "machine learning",
+        "ai roles", "data roles", "tech roles", "technology roles",
+        "artificial intelligence", "data science",
+    ]
+    if any(phrase in t for phrase in domain_phrases):
+        return _cv_role_defaults(cv)
+
+    if "billing analyst" in t or "billing" in t:
+        return _sanitize_roles(["Billing Analyst", "Senior Billing Analyst", "Billing Specialist", "Accounts Receivable Analyst"], cv, text)
+
+    # Try to extract specific role titles (comma-separated)
     parts = re.split(r"[,;]| and |/| or |\n", text)
-    out = [p.strip() for p in parts if p.strip()]
-    return [r for r in out if 2 <= len(r) <= 60][:8]
+    out = []
+    for p in parts:
+        p = p.strip()
+        # Filter out non-role fragments (search instructions, locations, etc.)
+        skip_words = ["please", "search", "find", "jobs in", "last", "days", "week",
+                      "month", "gcc", "uae", "dubai", "saudi", "qatar", "remote",
+                      "looking for", "i want", "i need", "help me"]
+        if any(sw in p.lower() for sw in skip_words):
+            continue
+        if 2 <= len(p) <= 60:
+            out.append(p)
+
+    # If after filtering we have nothing meaningful, use smart defaults
+    if not out:
+        return _cv_role_defaults(cv)
+
+    return _sanitize_roles(out, cv, text)
 
 
 def _extract_json(text: str) -> Optional[dict]:
@@ -121,16 +257,15 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
         system = {
             "role": "system",
             "content": (
-                "You are the AI Assistant inside Jobs Land, an executive AI/data job automation app. "
-                "Your job is to convert the user's natural language into job-search preferences aligned with Wael's CV "
-                "and his previous application behavior. Be concise and helpful.\n\n"
+                "You are the AI Assistant inside JobsLand. Convert the user's natural language into job-search preferences "
+                "aligned only with the currently uploaded CV, not any previous candidate. Be concise and helpful.\n\n"
                 "Return ONLY valid JSON with this schema:\n"
                 "{\n"
                 '  "reply": "short user-facing reply",\n'
                 '  "step": "country|recency|roles|confirm|ready|greet",\n'
                 '  "preferences": {\n'
                 '    "ready": boolean|null,\n'
-                '    "country": "GCC|UAE|Saudi Arabia|Qatar|Kuwait|Bahrain|Oman|Remote|..."|null,\n'
+                '    "country": "GCC|Europe|GCC + Europe|UAE|Saudi Arabia|Qatar|Kuwait|Bahrain|Oman|Remote|..."|null,\n'
                 '    "countries": ["..."],\n'
                 '    "locations": ["..."],\n'
                 '    "recency_days": number|null,\n'
@@ -139,9 +274,12 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
                 "}\n\n"
                 "Rules:\n"
                 "- If the user says GCC/Gulf/MENA, set country to GCC and countries/locations to UAE, Saudi Arabia, Qatar, Kuwait, Bahrain, Oman.\n"
+                "- If the user says Europe/EU, set country to Europe and countries/locations to United Kingdom, Ireland, Germany, Netherlands, France, Spain, Italy, Switzerland, Sweden, Denmark, Belgium, Poland.\n"
+                "- If the user combines regions, for example Gulf and Europe, set country to GCC + Europe and include both region country lists.\n"
                 "- If they say last week, set recency_days to 7. Today/past 24 hours is 1. Last month is 30.\n"
-                "- If they say all jobs for me / based on my CV, choose semantic role families suitable for a senior AI & Data leader.\n"
-                "- Good role families include AI & Data Leadership, Data & AI Product, AI Platform, AI Solutions Architecture, Data Governance, Digital Transformation, AI Automation, Machine Learning Leadership.\n"
+                "- If they say all jobs for me / based on my CV, choose concrete LinkedIn-searchable titles from the uploaded CV summary, title, and skills.\n"
+                "- Do not add AI, Data Science, Machine Learning, Scala, or Data Governance roles unless the current CV or user explicitly asks for them.\n"
+                "- For billing/invoicing/accounts receivable CVs, good titles include Billing Analyst, Senior Billing Analyst, Billing Specialist, Accounts Receivable Analyst, Invoicing Specialist, Revenue Cycle Analyst, Collections Analyst, and Finance Operations Analyst.\n"
                 "- Set ready true only when country/location, recency, and roles are known.\n"
                 "- Ask one short follow-up if something essential is missing.\n"
             ),
@@ -187,14 +325,20 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
         prefs_update = parsed.get("preferences") or {}
         prefs_update = {k: v for k, v in prefs_update.items() if v not in (None, "", [])}
 
-        country = prefs_update.get("country")
-        if country and not prefs_update.get("countries"):
-            prefs_update.update(_country_payload(country))
+        direct_country_payload = _parse_country_payload(user_msg)
+        if direct_country_payload:
+            prefs_update.update(direct_country_payload)
+        else:
+            country = prefs_update.get("country")
+            if country and not prefs_update.get("countries"):
+                prefs_update.update(_country_payload(country))
 
         if not prefs_update.get("roles"):
-            parsed_roles = _parse_roles(user_msg)
+            parsed_roles = _parse_roles(user_msg, cv)
             if parsed_roles:
                 prefs_update["roles"] = parsed_roles
+        else:
+            prefs_update["roles"] = _sanitize_roles(prefs_update.get("roles") or [], cv, user_msg)
 
         if (
             prefs_update.get("country")
@@ -213,8 +357,8 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
 
 
 def _greet(s) -> str:
-    name = (s["profile"].get("name") or "there").split(" ")[0]
     cv = s["cv"]
+    name = (cv.get("name") or s["profile"].get("name") or "there").split(" ")[0]
     if not cv.get("filename"):
         return (f"Hi {name}! Before we set your preferences, I need your CV uploaded "
                 f"so I can match jobs to your real skills. Head to **My CV** and upload it — "
@@ -230,15 +374,15 @@ def _step_response(step: str, msg: str, s: dict) -> Tuple[str, str, dict]:
     if ai_result:
         return ai_result
 
-    country = _parse_country(msg)
+    country_update = _parse_country_payload(msg)
+    country = country_update["country"] if country_update else None
     days = _parse_recency(msg)
-    roles = _parse_roles(msg)
+    roles = _parse_roles(msg, s.get("cv", {}))
 
     if country and days and roles:
-        country_update = _country_payload(country)
         return "ready", (
             f"Got it. I saved a ready-to-run search for **{country}**, jobs from the **last {days} day(s)**, "
-            "focused on AI/data leadership roles aligned to your CV and previous applications.\n\n"
+            "focused on roles aligned to the uploaded CV.\n\n"
             "Go to the Dashboard and click **Run Automation**."
         ), {**country_update, "recency_days": days, "roles": roles, "ready": True}
 
@@ -250,10 +394,10 @@ def _step_response(step: str, msg: str, s: dict) -> Tuple[str, str, dict]:
     if step == "country":
         if not country:
             return "country", ("I didn't catch a country in there — try one of: "
-                              + ", ".join(COUNTRIES[:6]) + "…"), {}
+                              + ", ".join(COUNTRIES[:8]) + "…"), {}
         return "recency", (f"Great — searching in **{country}**.\n\n"
                             f"**How recent should the jobs be?** (e.g. *posted today*, "
-                            f"*last week*, *last 14 days*, *last month*)"), _country_payload(country)
+                            f"*last week*, *last 14 days*, *last month*)"), country_update or _country_payload(country)
 
     if step == "recency":
         if not days:
@@ -317,7 +461,9 @@ def chat(body: ChatIn):
                       ("reset", "reset preferences", "start over", "restart")):
         def m(st):
             st["chat"] = {"step": "greet", "history": []}
-            st["preferences"] = {**st["preferences"], "ready": False}
+            st["preferences"] = {"ready": False, "country": None, "city": None,
+                                  "countries": [], "locations": [], "roles": [],
+                                  "recency_days": None, "industries": []}
         state.update(m)
         s = state.get()
 

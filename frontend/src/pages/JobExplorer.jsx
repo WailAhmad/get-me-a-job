@@ -1,105 +1,87 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getJobs, dismissJob } from '../api/client'
-import { Search, ExternalLink, Briefcase, RefreshCw, Trash2, ShieldAlert, CheckCircle2, Clock, Globe2, Layers3 } from 'lucide-react'
+import { Search, ExternalLink, Briefcase, RefreshCw, Trash2, CheckCircle2, Globe2, Send, Zap, XCircle, AlertTriangle } from 'lucide-react'
 
+/* ───────────────────────── helpers ───────────────────────── */
 const scoreColor = (s) => s >= 85 ? '#34d399' : s >= 70 ? '#38bdf8' : '#fbbf24'
-const statusLabel = {
-  discovered: 'Discovered',
-  external: 'External',
-  pending: 'Pending',
-  applied: 'Applied',
-  skipped: 'Skipped',
-}
-const statusClass = {
-  discovered: 'badge-blue',
-  external: 'badge-blue',
-  pending: 'badge-amber',
-  applied: 'badge-green',
-  skipped: 'badge-gray',
-}
-const PAGE_SIZE = 60
 
-const hourKey = (ts) => {
-  if (!ts) return null
-  const d = new Date(ts * 1000)
-  d.setMinutes(0, 0, 0)
-  return d.toISOString()
-}
+/**
+ * Bucket a job into one of three categories — we ignore "skipped" entirely,
+ * since the user wants to focus only on the valid pipeline.
+ *
+ *   auto_applied : Easy Apply + already submitted (verified) by the agent
+ *   suitable     : Easy Apply + still in the queue (passes score, may have been
+ *                  manually clicked but not auto-applied yet)
+ *   external     : No Easy Apply — must be opened on the open web
+ *   null         : Skipped / dropped — not surfaced anywhere
+ */
+const SUITABLE_MIN_SCORE = 70
 
-function buildHourlySeries(jobs) {
-  const map = new Map()
-  jobs.forEach(job => {
-    const discoveredKey = hourKey(job.discovered_at)
-    if (discoveredKey) {
-      const row = map.get(discoveredKey) || { key: discoveredKey, label: new Date(discoveredKey).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }), found:0, applied:0, external:0 }
-      row.found += 1
-      if (job.status === 'external') row.external += 1
-      map.set(discoveredKey, row)
-    }
-    const appliedKey = hourKey(job.applied_at)
-    if (appliedKey && job.submission_verified) {
-      const row = map.get(appliedKey) || { key: appliedKey, label: new Date(appliedKey).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }), found:0, applied:0, external:0 }
-      row.applied += 1
-      map.set(appliedKey, row)
-    }
-  })
-  return Array.from(map.values()).sort((a,b) => new Date(a.key) - new Date(b.key)).slice(-24)
+/** Parse a raw error string into a short human-readable reason. */
+function parseFailReason(err) {
+  if (!err) return 'Unknown error'
+  const e = err.toLowerCase()
+  if (e.includes('err_internet_disconnected') || e.includes('net::err')) return 'Network disconnected during apply'
+  if (e.includes('timeout') || e.includes('timed out'))  return 'Page load timed out'
+  if (e.includes('no such element') || e.includes('element not found')) return 'Apply button not found on page'
+  if (e.includes('session') && e.includes('deleted'))    return 'Browser session was closed'
+  if (e.includes('captcha') || e.includes('challenge'))  return 'CAPTCHA / bot challenge blocked submit'
+  if (e.includes('already applied'))                     return 'LinkedIn detected duplicate application'
+  if (e.includes('navigation failed'))                   return 'Page navigation failed'
+  if (e.includes('stale element'))                       return 'Page changed during form fill'
+  if (e.includes('submit') || e.includes('form'))        return 'Form submission failed'
+  if (e.includes('login') || e.includes('sign in'))      return 'LinkedIn session expired - re-login needed'
+  // Fall back to first line, trimmed to 80 chars
+  return err.split('\n')[0].trim().slice(0, 80)
 }
 
-function MiniLineChart({ data }) {
-  const width = 760
-  const height = 210
-  const pad = 30
-  const max = Math.max(1, ...data.flatMap(d => [d.found, d.applied, d.external]))
-  const x = (i) => data.length <= 1 ? pad : pad + (i * (width - pad * 2)) / (data.length - 1)
-  const y = (v) => height - pad - (v * (height - pad * 2)) / max
-  const path = (key) => data.map((d,i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(d[key])}`).join(' ')
-  const series = [
-    ['found', '#38bdf8', 'Found'],
-    ['external', '#a78bfa', 'External'],
-    ['applied', '#34d399', 'Verified applied'],
-  ]
-  if (!data.length) {
-    return <div className="card" style={{ padding:24, color:'#64748b', fontSize:13 }}>No hourly activity yet.</div>
-  }
+function bucketOf(j) {
+  if (j.status === 'skipped') return null
+  if (j.status === 'failed')  return 'failed'
+  if (j.easy_apply && j.submission_verified) return 'auto_applied'
+  if (j.easy_apply && (j.score ?? 0) >= SUITABLE_MIN_SCORE) return 'suitable'
+  if (!j.easy_apply && j.status !== 'skipped') return 'external'
+  return null
+}
+
+const BUCKET_META = {
+  suitable:     { label: 'Suitable',     color: '#10b981', icon: CheckCircle2 },
+  auto_applied: { label: 'Auto-Applied', color: '#34d399', icon: Send         },
+  external:     { label: 'External',     color: '#a78bfa', icon: Globe2       },
+  failed:       { label: 'Failed',       color: '#ef4444', icon: XCircle      },
+}
+
+/** Composite ranker for the External list: recent + relevant. */
+const externalRank = (j) => {
+  const recency = Math.max(0, 30 - (j.posted_days_ago ?? 30))   // 0…30 (newer = higher)
+  const score   = (j.score ?? 0)                                // 0…100
+  return recency * 2.5 + score                                  // tunable mix
+}
+
+const sortFor = (bucket) => {
+  if (bucket === 'auto_applied') return (a,b) => (b.applied_at||0) - (a.applied_at||0)
+  if (bucket === 'external')     return (a,b) => externalRank(b) - externalRank(a)
+  if (bucket === 'failed')       return (a,b) => (b.score||0) - (a.score||0)  // highest score first so best misses are visible
+  // suitable: score first, then recency
+  return (a,b) => (b.score||0) - (a.score||0) || (a.posted_days_ago||0) - (b.posted_days_ago||0)
+}
+
+/* ───────────────────────── small UI bits ───────────────────────── */
+function SummaryCard({ label, value, sub, icon:Icon, color, active, onClick }) {
   return (
-    <div className="card" style={{ padding:18, overflow:'hidden' }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:10, flexWrap:'wrap' }}>
-        <div>
-          <div style={{ fontSize:14, fontWeight:700, color:'#f1f5f9' }}>Hourly Activity</div>
-          <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>New jobs found, verified applied, and external jobs by hour</div>
-        </div>
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          {series.map(([key, color, label]) => (
-            <span key={key} style={{ display:'flex', alignItems:'center', gap:6, color:'#94a3b8', fontSize:11 }}>
-              <span style={{ height:7, width:7, borderRadius:'50%', background:color }} /> {label}
-            </span>
-          ))}
-        </div>
-      </div>
-      <svg viewBox={`0 0 ${width} ${height}`} style={{ width:'100%', height:220, display:'block' }}>
-        {[0, .25, .5, .75, 1].map((t, i) => {
-          const yy = pad + t * (height - pad * 2)
-          return <line key={i} x1={pad} x2={width-pad} y1={yy} y2={yy} stroke="rgba(148,163,184,.12)" strokeDasharray="4 5" />
-        })}
-        {series.map(([key, color]) => (
-          <path key={key} d={path(key)} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        ))}
-        {data.map((d,i) => (
-          <g key={d.key}>
-            <text x={x(i)} y={height - 6} fill="#475569" fontSize="10" textAnchor="middle">{d.label}</text>
-          </g>
-        ))}
-        <text x={8} y={pad + 4} fill="#64748b" fontSize="10">{max}</text>
-        <text x={14} y={height - pad + 4} fill="#64748b" fontSize="10">0</text>
-      </svg>
-    </div>
-  )
-}
-
-function SummaryCard({ label, value, sub, icon:Icon, color }) {
-  return (
-    <div className="card" style={{ padding:16, minHeight:112 }}>
+    <button
+      onClick={onClick}
+      className="card"
+      style={{
+        textAlign:'left',
+        padding:16, minHeight:112,
+        cursor:'pointer',
+        border: active ? `1px solid ${color}66` : '1px solid rgba(255,255,255,0.07)',
+        boxShadow: active ? `0 0 0 1px ${color}33, 0 8px 32px ${color}18` : undefined,
+        background: active ? `linear-gradient(180deg, ${color}10, rgba(255,255,255,0.02))` : undefined,
+        transition:'all .15s',
+      }}
+    >
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
         <div style={{ height:34, width:34, borderRadius:11, background:`${color}18`, border:`1px solid ${color}30`, display:'flex', alignItems:'center', justifyContent:'center' }}>
           <Icon size={16} style={{ color }} />
@@ -108,147 +90,216 @@ function SummaryCard({ label, value, sub, icon:Icon, color }) {
       </div>
       <div style={{ fontSize:28, color:'#f8fafc', fontWeight:800, lineHeight:1 }}>{value}</div>
       <div style={{ fontSize:11, color:'#64748b', marginTop:7, lineHeight:1.45 }}>{sub}</div>
-    </div>
+    </button>
   )
 }
 
+function ApplyBadge({ kind }) {
+  const m = BUCKET_META[kind]
+  if (!m) return null
+  const Icon = m.icon
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center', gap:5,
+      padding:'3px 9px', borderRadius:99, fontSize:11, fontWeight:600,
+      background:`${m.color}14`, color:m.color, border:`1px solid ${m.color}33`,
+    }}>
+      <Icon size={11} /> {m.label}
+    </span>
+  )
+}
+
+/* ───────────────────────── page ───────────────────────── */
 export default function JobExplorer() {
-  const [jobs, setJobs]     = useState([])
+  const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(false)
-  const [query, setQuery]   = useState('')
-  const [filter, setFilter] = useState('all')
-  const [visible, setVisible] = useState(PAGE_SIZE)
+  const [query, setQuery] = useState('')
+  const [bucket, setBucket] = useState('suitable')   // default to the queue
+  const [visible, setVisible] = useState(60)
 
   const load = async () => { setLoading(true); try { setJobs(await getJobs()) } catch {} finally { setLoading(false) } }
   useEffect(() => { load() }, [])
+  useEffect(() => { setVisible(60) }, [bucket, query])
 
   const remove = async (id) => { await dismissJob(id); setJobs(j => j.filter(x => x.id !== id)) }
 
-  const counts = jobs.reduce((acc, job) => {
-    acc.all += 1
-    acc[job.status] = (acc[job.status] || 0) + 1
-    return acc
-  }, { all:0 })
-  const filtered = jobs.filter(j => {
-    const matchesFilter = filter === 'all' || j.status === filter
-    const q = query.toLowerCase()
-    const matchesQuery = !q || j.title?.toLowerCase().includes(q) || j.company?.toLowerCase().includes(q) || j.location?.toLowerCase().includes(q)
-    return matchesFilter && matchesQuery
-  })
-  const visibleJobs = filtered.slice(0, visible)
-  const easyCandidates = jobs.filter(j => j.easy_apply).length
-  const verifiedUrls = jobs.filter(j => j.url_verified).length
-  const verifiedApplied = jobs.filter(j => j.submission_verified).length
-  const hourly = buildHourlySeries(jobs)
+  // Pre-bucket once and drop "skipped" entirely.
+  const tagged = useMemo(
+    () => jobs.map(j => ({ ...j, _bucket: bucketOf(j) })).filter(j => j._bucket),
+    [jobs]
+  )
 
-  useEffect(() => { setVisible(PAGE_SIZE) }, [filter, query])
+  const counts = useMemo(() => {
+    const c = { suitable:0, auto_applied:0, external:0, failed:0 }
+    tagged.forEach(j => { c[j._bucket] = (c[j._bucket] || 0) + 1 })
+    return c
+  }, [tagged])
+
+  // Search runs ONLY on the valid (non-skipped) pool, then we filter to the chosen bucket.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const inQ = (j) => !q
+      || j.title?.toLowerCase().includes(q)
+      || j.company?.toLowerCase().includes(q)
+      || j.location?.toLowerCase().includes(q)
+    return tagged.filter(j => j._bucket === bucket && inQ(j)).sort(sortFor(bucket))
+  }, [tagged, bucket, query])
+
+  const visibleJobs = filtered.slice(0, visible)
 
   return (
     <div className="animate-fade-in">
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8, flexWrap:'wrap', gap:12 }}>
         <div>
           <h1 className="page-title">Job Explorer</h1>
-          <p className="page-subtitle">All discovered jobs from the latest runs, including discovered, external, pending, skipped, and applied records</p>
+          <p className="page-subtitle">
+            Only jobs that pass scoring or come from open-web sources. Skipped jobs are filtered out automatically.
+          </p>
         </div>
         <button onClick={load} disabled={loading} className="btn-primary" style={{ gap:6 }}>
           <RefreshCw size={13} style={{ animation:loading?'spin 1s linear infinite':undefined }} /> Refresh
         </button>
       </div>
 
+      {/* ─── search (operates only on the valid pool) ─── */}
       <div style={{ position:'relative', margin:'16px 0' }}>
         <Search size={14} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'#64748b' }} />
-        <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by title or company…" style={{ paddingLeft:36, width:'100%' }} />
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search the valid pool — title, company, or location…"
+          style={{ paddingLeft:36, width:'100%' }}
+        />
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))', gap:12, marginBottom:14 }}>
-        <SummaryCard label="Total Found" value={jobs.length} sub="Complete inventory in this page" icon={Layers3} color="#38bdf8" />
-        <SummaryCard label="Easy Apply Candidates" value={easyCandidates} sub="Blocked until live URLs are verified" icon={CheckCircle2} color="#10b981" />
-        <SummaryCard label="Verified URLs" value={verifiedUrls} sub="Required before real submission" icon={ShieldAlert} color="#fbbf24" />
-        <SummaryCard label="External Jobs" value={counts.external || 0} sub="Need manual/open-web apply" icon={Globe2} color="#a78bfa" />
+      {/* ─── four category cards (also act as filters) ─── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12, marginBottom:18 }}>
+        <SummaryCard
+          label="Easy Apply — Suitable"
+          value={counts.suitable}
+          sub="Score ≥ 70 · queue, including jobs you already clicked"
+          icon={CheckCircle2} color="#10b981"
+          active={bucket === 'suitable'} onClick={() => setBucket('suitable')}
+        />
+        <SummaryCard
+          label="Auto-Applied"
+          value={counts.auto_applied}
+          sub="Submitted automatically by the agent (verified)"
+          icon={Zap} color="#34d399"
+          active={bucket === 'auto_applied'} onClick={() => setBucket('auto_applied')}
+        />
+        <SummaryCard
+          label="External Jobs"
+          value={counts.external}
+          sub="No Easy Apply · ranked by recency + relevance"
+          icon={Globe2} color="#a78bfa"
+          active={bucket === 'external'} onClick={() => setBucket('external')}
+        />
+        <SummaryCard
+          label="Failed"
+          value={counts.failed}
+          sub="Easy Apply attempted but errored — reason shown on each card"
+          icon={XCircle} color="#ef4444"
+          active={bucket === 'failed'} onClick={() => setBucket('failed')}
+        />
       </div>
 
-      <div style={{ marginBottom:16 }}>
-        <MiniLineChart data={hourly} />
-      </div>
+      {/* ─── list ─── */}
+      {loading ? (
+        <p style={{ textAlign:'center', color:'#64748b', padding:40 }}>Loading…</p>
+      ) : filtered.length === 0 ? (
+        <div className="card" style={{ textAlign:'center', padding:40 }}>
+          <Briefcase size={32} style={{ color:'#475569', marginBottom:10 }} />
+          <p style={{ color:'#64748b' }}>
+            {bucket === 'suitable'     && 'No suitable Easy Apply jobs in the queue right now.'}
+            {bucket === 'auto_applied' && "The agent has not auto-applied to anything yet."}
+            {bucket === 'external'     && 'No external (open-web) jobs discovered yet.'}
+            {bucket === 'failed'       && 'No failed apply attempts - great news!'}
+          </p>
+        </div>
+      ) : (
+        <>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(380px,1fr))', gap:12 }}>
+            {visibleJobs.map(j => {
+              const failReason = j._bucket === 'failed' ? parseFailReason(j.error) : null
+              return (
+              <div key={j.id} className="card" style={{ display:'flex', flexDirection:'column', gap:12, padding:'16px 18px',
+                border: j._bucket === 'failed' ? '1px solid rgba(239,68,68,0.22)' : undefined }}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:14, minWidth:0 }}>
+                  <div style={{ height:48, width:48, borderRadius:12, background:'rgba(167,139,250,.14)', border:'1px solid rgba(167,139,250,.28)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:scoreColor(j.score) }}>{j.score ?? '—'}</span>
+                  </div>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontSize:15, fontWeight:700, color:'#f1f5f9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{j.title}</div>
+                    <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>
+                      {j.company} · {j.location} · {j.source || 'Source'} · {j.posted_days_ago ?? 0}d ago
+                    </div>
+                  </div>
+                  <ApplyBadge kind={j._bucket} />
+                </div>
 
-      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
-        {['all','discovered','external','pending','applied','skipped'].map(key => (
-          <button key={key} onClick={() => setFilter(key)} className={filter === key ? 'btn-primary' : 'btn-secondary'} style={{ padding:'7px 11px', fontSize:12 }}>
-            {key === 'all' ? 'All' : statusLabel[key]} <span style={{ opacity:.75 }}>{counts[key] || 0}</span>
-          </button>
-        ))}
-      </div>
+                {/* ── Failure reason banner ── */}
+                {failReason && (
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px', borderRadius:12,
+                    background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.20)' }}>
+                    <AlertTriangle size={13} style={{ color:'#f87171', flexShrink:0, marginTop:1 }} />
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:700, color:'#f87171', marginBottom:2 }}>Why it failed</div>
+                      <div style={{ fontSize:12, color:'#fca5a5', lineHeight:1.45 }}>{failReason}</div>
+                    </div>
+                  </div>
+                )}
 
-      {loading ? <p style={{ textAlign:'center', color:'#64748b', padding:40 }}>Loading…</p> :
-       filtered.length === 0 ? (
-         <div className="card" style={{ textAlign:'center', padding:40 }}>
-           <Briefcase size={32} style={{ color:'#475569', marginBottom:10 }} />
-           <p style={{ color:'#64748b' }}>No jobs match this view yet.</p>
-         </div>
-       ) :
-       <>
-       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(360px,1fr))', gap:12 }}>
-         {visibleJobs.map(j => (
-           <div key={j.id} className="card" style={{ display:'flex', flexDirection:'column', gap:12, padding:'16px 18px' }}>
-             <div style={{ display:'flex', alignItems:'flex-start', gap:14, minWidth:0 }}>
-               <div style={{ height:48, width:48, borderRadius:12, background:'rgba(167,139,250,.14)', border:'1px solid rgba(167,139,250,.28)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                 <span style={{ fontSize:13, fontWeight:700, color:scoreColor(j.score) }}>{j.score}</span>
-               </div>
-               <div style={{ minWidth:0, flex:1 }}>
-                 <div style={{ fontSize:15, fontWeight:700, color:'#f1f5f9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{j.title}</div>
-                 <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>
-                   {j.company} · {j.location} · {j.source || 'Source'} · posted {j.posted_days_ago||0}d ago
-                 </div>
-               </div>
-               <span className={`badge ${statusClass[j.status] || 'badge-gray'}`}>{statusLabel[j.status] || j.status}</span>
-             </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8 }}>
+                  <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
+                    <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>Apply type</div>
+                    <div style={{ fontSize:12, color:'#cbd5e1', marginTop:4 }}>
+                      {j.easy_apply ? 'Easy Apply' : 'External'}
+                    </div>
+                  </div>
+                  <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
+                    <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>
+                      {j._bucket === 'auto_applied' ? 'Submitted' : j._bucket === 'failed' ? 'Attempted' : 'Found'}
+                    </div>
+                    <div style={{ fontSize:12, color:'#cbd5e1', marginTop:4 }}>
+                      {(j._bucket === 'auto_applied' ? j.applied_at : j.discovered_at)
+                        ? new Date(((j._bucket === 'auto_applied' ? j.applied_at : j.discovered_at)) * 1000)
+                            .toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+                        : '—'}
+                    </div>
+                  </div>
+                  <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
+                    <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>Match</div>
+                    <div style={{ fontSize:12, color:scoreColor(j.score), marginTop:4 }}>
+                      {j.score >= 85 ? 'Strong' : j.score >= 70 ? 'Good' : j.score ? 'Borderline' : '—'}
+                    </div>
+                  </div>
+                </div>
 
-             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8 }}>
-               <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
-                 <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>Apply type</div>
-                 <div style={{ fontSize:12, color:'#cbd5e1', marginTop:4 }}>{j.apply_type || (j.easy_apply ? 'Easy Apply' : 'External')}</div>
-               </div>
-               <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
-                 <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>Verified URL</div>
-                 <div style={{ fontSize:12, color:j.url_verified ? '#34d399' : '#fbbf24', marginTop:4 }}>{j.url_verified ? 'Yes' : 'No'}</div>
-               </div>
-               <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
-                 <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>Found</div>
-                 <div style={{ fontSize:12, color:'#cbd5e1', marginTop:4 }}>{j.discovered_at ? new Date(j.discovered_at*1000).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '—'}</div>
-               </div>
-             </div>
-
-             {!j.url_verified && (
-               <div style={{ display:'flex', alignItems:'flex-start', gap:7, color:'#fbbf24', fontSize:11, lineHeight:1.45, background:'rgba(245,158,11,.07)', border:'1px solid rgba(245,158,11,.16)', borderRadius:12, padding:'9px 10px' }}>
-                 <ShieldAlert size={13} style={{ flexShrink:0, marginTop:1 }} /> Easy Apply is blocked until the automation captures the real live job posting URL.
-               </div>
-             )}
-
-             <div style={{ display:'flex', gap:8, alignItems:'center', justifyContent:'space-between' }}>
-               {j.url_verified ? (
-                 <a href={j.url} target="_blank" rel="noreferrer" className="btn-primary" style={{ gap:6, padding:'8px 14px', fontSize:12 }}>
-                   Open <ExternalLink size={12}/>
-                 </a>
-               ) : (
-                 <button disabled className="btn-secondary" title={j.url_warning || 'No verified live job URL captured'} style={{ gap:6, padding:'8px 14px', fontSize:12, opacity:.55, cursor:'not-allowed' }}>
-                   Unverified
-                 </button>
-               )}
-               <button onClick={()=>remove(j.id)} title="Dismiss" style={{ background:'none', border:'1px solid rgba(255,255,255,0.06)', borderRadius:10, padding:8, color:'#475569', cursor:'pointer' }}>
-                 <Trash2 size={13}/>
-               </button>
-             </div>
-           </div>
-         ))}
-       </div>
-       {visible < filtered.length && (
-         <div style={{ display:'flex', justifyContent:'center', marginTop:18 }}>
-           <button className="btn-secondary" onClick={() => setVisible(v => v + PAGE_SIZE)}>
-             Show more jobs <span style={{ opacity:.7 }}>({Math.min(PAGE_SIZE, filtered.length - visible)} more)</span>
-           </button>
-         </div>
-       )}
-       </>}
+                <div style={{ display:'flex', gap:8, alignItems:'center', justifyContent:'space-between' }}>
+                  {j.url ? (
+                    <a href={j.url} target="_blank" rel="noreferrer" className="btn-primary" style={{ gap:6, padding:'8px 14px', fontSize:12 }}>
+                      Open <ExternalLink size={12}/>
+                    </a>
+                  ) : (
+                    <span style={{ color:'#475569', fontSize:11 }}>No live URL</span>
+                  )}
+                  <button onClick={()=>remove(j.id)} title="Dismiss" style={{ background:'none', border:'1px solid rgba(255,255,255,0.06)', borderRadius:10, padding:8, color:'#475569', cursor:'pointer' }}>
+                    <Trash2 size={13}/>
+                  </button>
+                </div>
+              </div>
+            )})}
+          </div>
+          {visible < filtered.length && (
+            <div style={{ display:'flex', justifyContent:'center', marginTop:18 }}>
+              <button className="btn-secondary" onClick={() => setVisible(v => v + 60)}>
+                Show more <span style={{ opacity:.7 }}>({Math.min(60, filtered.length - visible)} more)</span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
