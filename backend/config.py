@@ -28,7 +28,10 @@ AI_API_KEY  = os.getenv("AI_API_KEY", "")
 AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.groq.com/openai/v1")
 AI_MODEL    = os.getenv("AI_MODEL", "llama-3.3-70b-versatile")
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:3000")
+# Replit serves on port 5000; local Mac dev uses 3000.
+# REPL_ID is set by Replit automatically.
+_default_frontend_port = "5000" if os.environ.get("REPL_ID") else "3000"
+FRONTEND_URL = os.getenv("FRONTEND_URL", f"http://127.0.0.1:{_default_frontend_port}")
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")

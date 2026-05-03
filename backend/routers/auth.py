@@ -103,12 +103,24 @@ def _hash_code(email: str, code: str) -> str:
     return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
 
 
+SMTP_DEV_MODE = not _smtp_configured()   # True = console-log fallback, no real email sent
+
+
 def _send_email_code(email: str, code: str) -> None:
-    if not _smtp_configured():
-        raise HTTPException(
-            501,
-            "Email sign-up is not configured. JobsLand is preset for SMTP2GO. Add SMTP2GO_API_KEY and SMTP_FROM_EMAIL to backend .env.",
-        )
+    """Send the verification code.
+
+    If SMTP is not configured (dev / no-secrets environment) we print the code
+    to stdout with a clear banner instead of raising an error — so the app is
+    fully usable without any email service set up.
+    """
+    if SMTP_DEV_MODE:
+        banner = "=" * 60
+        print(f"\n{banner}")
+        print("  JOBSLAND EMAIL VERIFICATION CODE (dev / no-SMTP mode)")
+        print(f"  To:   {email}")
+        print(f"  Code: {code}")
+        print(f"{banner}\n", flush=True)
+        return   # success — caller reads the code from the console
 
     subject = "Your JobsLand verification code"
     text_body = (
@@ -207,12 +219,17 @@ def providers():
         },
         "email": {
             "configured": _smtp_configured(),
+            "dev_mode": SMTP_DEV_MODE,
             "missing": _missing_smtp(),
             "provider": SMTP_PROVIDER,
             "host": SMTP_HOST,
             "port": SMTP_PORT,
             "api_configured": bool(SMTP2GO_API_KEY),
-            "detail": "SMTP2GO is selected by default. Add SMTP2GO_API_KEY plus a verified SMTP_FROM_EMAIL, or use SMTP username/password fallback.",
+            "detail": (
+                "No SMTP configured — verification codes are printed to the backend console."
+                if SMTP_DEV_MODE else
+                "SMTP2GO is selected by default. Add SMTP2GO_API_KEY plus a verified SMTP_FROM_EMAIL, or use SMTP username/password fallback."
+            ),
         },
     }
 
@@ -241,7 +258,15 @@ def email_start(body: dict):
         }
 
     state.update(m)
-    return {"success": True, "message": "Verification code sent."}
+    return {
+        "success": True,
+        "dev_mode": SMTP_DEV_MODE,
+        "message": (
+            "Dev mode: check the Backend API console for your verification code (SMTP not configured)."
+            if SMTP_DEV_MODE else
+            "Verification code sent — check your email."
+        ),
+    }
 
 
 @router.post("/email/verify")

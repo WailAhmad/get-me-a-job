@@ -45,13 +45,19 @@ export default function Welcome({ onAuthenticated }) {
     window.location.href = `/api/auth/${provider}/start`
   }
 
+  const emailDevMode = providers?.email?.dev_mode
+
   const sendEmailCode = async () => {
     setPhase('opening')
     setStatus('Sending verification code...')
     try {
-      await startEmailSignup(email)
+      const res = await startEmailSignup(email)
       setPhase('code')
-      setStatus(`Verification code sent to ${email}.`)
+      setStatus(
+        res?.dev_mode
+          ? `Dev mode: check the Backend API console for your code (SMTP not configured).`
+          : `Verification code sent to ${email} — check your inbox.`
+      )
     } catch (e) {
       const data = e?.response?.data
       setPhase('error')
@@ -163,7 +169,12 @@ export default function Welcome({ onAuthenticated }) {
           <div style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.08)', borderRadius:24, padding:24, backdropFilter:'blur(24px)' }}>
             {(phase==='idle'||phase==='error') && (
               <div>
-                <p style={{ fontSize:13, color:'#64748b', marginBottom:10, lineHeight:1.6 }}>Step 1: sign up with your email. We send a real verification code to your inbox before signing you in. LinkedIn automation still requires a real LinkedIn session in Settings.</p>
+                <p style={{ fontSize:13, color:'#64748b', marginBottom:10, lineHeight:1.6 }}>
+                  {emailDevMode
+                    ? 'Dev mode: enter your email and check the Backend API console for your verification code (SMTP not configured).'
+                    : 'Step 1: sign up with your email. We send a real verification code to your inbox before signing you in. LinkedIn automation still requires a real LinkedIn session in Settings.'
+                  }
+                </p>
                 <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:12 }}>
                   <input
                     type="email"
