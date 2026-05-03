@@ -33,3 +33,6 @@ logs/
 
 # User photos / avatars
 frontend/public/photos/
+
+# Local OAuth tokens / secrets
+backend/.local/
