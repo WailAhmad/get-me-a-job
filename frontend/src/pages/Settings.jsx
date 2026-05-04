@@ -15,8 +15,13 @@ import {
   setLiveMode,
   linkedinDiagnose,
   testLinkedinSearch,
+  getAllSettings,
+  updateSetting,
 } from '../api/client'
-import { Link2, RefreshCw, LogOut, UserRound, Globe2, CheckCircle2, PlugZap, Zap, Activity } from 'lucide-react'
+import { Link2, RefreshCw, LogOut, UserRound, Globe2, CheckCircle2, PlugZap, Zap, Activity, Briefcase, Save } from 'lucide-react'
+
+const EDUCATION_OPTIONS = ['PhD', "Master's", "Bachelor's", 'Diploma', 'High School']
+const NOTICE_OPTIONS    = ['Immediate', '2 weeks', '1 month', '2 months', '3 months', '6 months']
 
 export default function Settings({ onDisconnect }) {
   const [session, setSession]   = useState(null)
@@ -32,18 +37,54 @@ export default function Settings({ onDisconnect }) {
   const [diagBusy, setDiagBusy] = useState(false)
   const [diagResult, setDiagResult] = useState(null)
 
+  // Job preferences
+  const [prefs, setPrefs] = useState({
+    salary_expectation: '', current_salary: '', notice_period: '',
+    education_level: '', work_authorization: 'yes', visa_sponsorship: 'no',
+    willing_to_relocate: 'yes', daily_cap: '50',
+  })
+  const [prefsBusy, setPrefsBusy] = useState(false)
+  const [prefsMsg, setPrefsMsg] = useState('')
+
   const load = async () => {
     setLoading(true)
     try {
-      const [s, p, src, lm] = await Promise.all([
-        getLinkedInSessionStatus(), getProfile(), getJobSources(), getLiveMode()
+      const [s, p, src, lm, allSettings] = await Promise.all([
+        getLinkedInSessionStatus(), getProfile(), getJobSources(), getLiveMode(),
+        getAllSettings().catch(() => null),
       ])
       setSession(s)
       setProfile(p)
       setSources(src.sources || [])
       setLiveModeState(lm)
+      if (allSettings) {
+        setPrefs(prev => ({
+          ...prev,
+          salary_expectation: allSettings.salary_expectation ?? '',
+          current_salary:     allSettings.current_salary ?? '',
+          notice_period:      allSettings.notice_period ?? '',
+          education_level:    allSettings.education_level ?? '',
+          work_authorization: allSettings.work_authorization ?? 'yes',
+          visa_sponsorship:   allSettings.visa_sponsorship ?? 'no',
+          willing_to_relocate:allSettings.willing_to_relocate ?? 'yes',
+          daily_cap:          String(allSettings.daily_cap ?? '50'),
+        }))
+      }
     } catch {}
     setLoading(false)
+  }
+
+  const savePrefs = async () => {
+    setPrefsBusy(true); setPrefsMsg('')
+    try {
+      await Promise.all(
+        Object.entries(prefs).map(([k, v]) => updateSetting(k, v))
+      )
+      setPrefsMsg('Preferences saved ✓')
+      setTimeout(() => setPrefsMsg(''), 3000)
+    } catch (e) {
+      setPrefsMsg(e.response?.data?.detail || e.message || 'Save failed')
+    } finally { setPrefsBusy(false) }
   }
 
   const toggleLive = async () => {
@@ -192,6 +233,118 @@ export default function Settings({ onDisconnect }) {
               Sync LinkedIn Profile
             </button>
           </div>
+        </div>
+
+        {/* ─── Job Application Preferences ─── */}
+        <div className="card" style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+            <Briefcase size={16} style={{ color:'#a78bfa' }} />
+            <span style={{ fontSize:14, fontWeight:600, color:'#f1f5f9' }}>Job Application Preferences</span>
+          </div>
+          <p style={{ fontSize:12, color:'#64748b', lineHeight:1.5, marginTop:-8 }}>
+            These answers fill form fields automatically. Set them once — the AI will use them on every application instead of guessing.
+          </p>
+
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))', gap:12 }}>
+            {/* Expected salary */}
+            <label style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>Expected Salary</span>
+              <input
+                value={prefs.salary_expectation}
+                onChange={e => setPrefs(p => ({ ...p, salary_expectation: e.target.value }))}
+                placeholder="e.g. 25000 (monthly) or 300000 (annual)"
+                style={{ width:'100%' }}
+              />
+            </label>
+
+            {/* Current salary */}
+            <label style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>Current Salary <span style={{ fontWeight:400, textTransform:'none', letterSpacing:0 }}>(optional)</span></span>
+              <input
+                value={prefs.current_salary}
+                onChange={e => setPrefs(p => ({ ...p, current_salary: e.target.value }))}
+                placeholder="e.g. 22000"
+                style={{ width:'100%' }}
+              />
+            </label>
+
+            {/* Notice period */}
+            <label style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>Notice Period</span>
+              <select
+                value={prefs.notice_period}
+                onChange={e => setPrefs(p => ({ ...p, notice_period: e.target.value }))}
+                style={{ width:'100%' }}
+              >
+                <option value="">— select —</option>
+                {NOTICE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+
+            {/* Education */}
+            <label style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>Highest Education</span>
+              <select
+                value={prefs.education_level}
+                onChange={e => setPrefs(p => ({ ...p, education_level: e.target.value }))}
+                style={{ width:'100%' }}
+              >
+                <option value="">— select —</option>
+                {EDUCATION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+
+            {/* Visa sponsorship */}
+            <label style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>Requires Visa Sponsorship?</span>
+              <select
+                value={prefs.visa_sponsorship}
+                onChange={e => setPrefs(p => ({ ...p, visa_sponsorship: e.target.value }))}
+                style={{ width:'100%' }}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </label>
+
+            {/* Relocation */}
+            <label style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>Willing to Relocate?</span>
+              <select
+                value={prefs.willing_to_relocate}
+                onChange={e => setPrefs(p => ({ ...p, willing_to_relocate: e.target.value }))}
+                style={{ width:'100%' }}
+              >
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
+
+            {/* Daily cap */}
+            <label style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.05em' }}>Daily Apply Cap <span style={{ fontWeight:400, textTransform:'none', letterSpacing:0 }}>(max 50 recommended)</span></span>
+              <input
+                type="number"
+                min="1" max="100"
+                value={prefs.daily_cap}
+                onChange={e => setPrefs(p => ({ ...p, daily_cap: e.target.value }))}
+                style={{ width:'100%' }}
+              />
+            </label>
+          </div>
+
+          {prefsMsg && (
+            <div style={{ fontSize:12, color: prefsMsg.includes('✓') ? '#34d399' : '#f87171',
+              background: prefsMsg.includes('✓') ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
+              border: `1px solid ${prefsMsg.includes('✓') ? 'rgba(52,211,153,0.22)' : 'rgba(248,113,113,0.22)'}`,
+              borderRadius:10, padding:'8px 12px' }}>
+              {prefsMsg}
+            </div>
+          )}
+
+          <button onClick={savePrefs} disabled={prefsBusy} className="btn-primary" style={{ gap:6, width:'fit-content' }}>
+            <Save size={13} /> {prefsBusy ? 'Saving…' : 'Save Preferences'}
+          </button>
         </div>
 
         <div className="card" style={{ display:'flex', flexDirection:'column', gap:14, border:`1px solid ${liveMode.effective?'rgba(16,185,129,0.30)':'rgba(245,158,11,0.25)'}`, background:liveMode.effective?'linear-gradient(135deg,rgba(16,185,129,0.08),rgba(56,189,248,0.04))':'linear-gradient(135deg,rgba(245,158,11,0.06),rgba(56,189,248,0.03))' }}>

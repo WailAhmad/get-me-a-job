@@ -16,11 +16,20 @@ _login_state: dict = {}
 @router.get("/")
 def get_all():
     s = state.get()
+    prefs = s.get("preferences", {})
     return {
-        "daily_cap": 100,
+        "daily_cap": int(prefs.get("daily_cap") or 50),
         "hourly_cap": 10,
         "live_mode": bool(s.get("live_mode")),
         "linkedin_session": sm.has_valid_session(),
+        # User job-application preferences
+        "salary_expectation": prefs.get("salary_expectation", ""),
+        "current_salary":     prefs.get("current_salary", ""),
+        "notice_period":      prefs.get("notice_period", ""),
+        "education_level":    prefs.get("education_level", ""),
+        "work_authorization": prefs.get("work_authorization", "yes"),
+        "visa_sponsorship":   prefs.get("visa_sponsorship", "no"),
+        "willing_to_relocate":prefs.get("relocation", "yes"),
     }
 
 

@@ -70,6 +70,15 @@ def _location_value(cv: dict, profile: dict, kind: str) -> str:
     return location
 
 
+def _prefs() -> dict:
+    """Read saved user preferences from state (salary, notice period, education…)."""
+    try:
+        from backend import state as _state
+        return _state.get().get("preferences") or {}
+    except Exception:
+        return {}
+
+
 def profile_lookup(label: str, cv: dict, profile: dict) -> Optional[str]:
     """Direct profile fields. Returns None if no confident match."""
     if not label:
@@ -79,6 +88,7 @@ def profile_lookup(label: str, cv: dict, profile: dict) -> Optional[str]:
     phone = _phone(cv, profile)
     email = _email(cv, profile)
     name  = _name(cv, profile)
+    saved_prefs = _prefs()
 
     # Phone country code. Only answer when the phone reveals it.
     if ("country" in ll and "code" in ll) or ll in ("phone country code", "country code"):
@@ -119,14 +129,22 @@ def profile_lookup(label: str, cv: dict, profile: dict) -> Optional[str]:
     if "nationality" in ll or "citizenship" in ll:
         return cv.get("nationality") or profile.get("nationality") or None
 
-    # Notice period — read from cv/profile, sensible default
+    # Notice period — saved prefs → cv → profile → "30 days"
     if "notice" in ll and ("period" in ll or "day" in ll or "month" in ll):
-        val = (cv.get("notice_period") or profile.get("notice_period") or "").strip()
+        val = (
+            str(saved_prefs.get("notice_period") or "").strip()
+            or str(cv.get("notice_period") or "").strip()
+            or str(profile.get("notice_period") or "").strip()
+        )
         return val if val else "30"
 
-    # Education — derive highest degree from CV education list
+    # Education — saved prefs first, then derive from CV education list
     edu_list = cv.get("education") or []
     def _highest_degree() -> str:
+        # User explicitly set their degree in Settings — most reliable
+        pref_deg = str(saved_prefs.get("education_level") or "").strip()
+        if pref_deg:
+            return pref_deg
         """Scan cv.education for the highest academic credential."""
         combined = " ".join(
             " ".join([
@@ -167,9 +185,11 @@ def profile_lookup(label: str, cv: dict, profile: dict) -> Optional[str]:
     if ("authorized" in ll or "authorised" in ll or "authorization" in ll or "right to work" in ll) and "work" in ll:
         return "Yes"
     if "sponsorship" in ll:
-        return "No"
+        val = str(saved_prefs.get("visa_sponsorship") or "no").strip().lower()
+        return "Yes" if val == "yes" else "No"
     if "relocat" in ll:
-        return "Yes"
+        val = str(saved_prefs.get("relocation") or saved_prefs.get("willing_to_relocate") or "yes").strip().lower()
+        return "Yes" if val == "yes" else "No"
     if "commut" in ll:
         return "Yes"
     if "background check" in ll or "background screening" in ll:
@@ -183,13 +203,15 @@ def profile_lookup(label: str, cv: dict, profile: dict) -> Optional[str]:
     if "18" in ll and ("age" in ll or "years" in ll or "older" in ll):
         return "Yes"
 
-    # Salary — read from cv/profile preferences; don't guess if not set
+    # Salary — saved prefs → cv → profile; return None if not set (AI handles it)
     _sal_expected = (
-        str(cv.get("salary_expectation") or "").strip()
+        str(saved_prefs.get("salary_expectation") or "").strip()
+        or str(cv.get("salary_expectation") or "").strip()
         or str(profile.get("salary_expectation") or "").strip()
     )
     _sal_current = (
-        str(cv.get("current_salary") or "").strip()
+        str(saved_prefs.get("current_salary") or "").strip()
+        or str(cv.get("current_salary") or "").strip()
         or str(profile.get("current_salary") or "").strip()
     )
     if "expected" in ll and "salary" in ll:
