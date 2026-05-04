@@ -56,6 +56,8 @@ def stats():
     lr_applied       = len([j for j in last_run_jobs if j.get("status") == "applied" and j.get("submission_verified")])
     lr_already       = len([j for j in last_run_jobs if j.get("status") == "already_applied"])
     lr_pending       = len([j for j in last_run_jobs if j.get("status") == "pending"])
+    lr_easy_pending  = len([j for j in lr_matched_jobs if j.get("easy_apply") and j.get("status") == "pending"])
+    lr_easy_queue    = len([j for j in lr_matched_jobs if j.get("easy_apply") and j.get("status") == "discovered"])
     lr_skipped       = len([j for j in last_run_jobs if j.get("status") == "skipped"])
     lr_filtered      = lr_found - lr_matched  # jobs that didn't match
 
@@ -81,6 +83,8 @@ def stats():
         "last_run_applied":     lr_applied,
         "last_run_already":     lr_already,
         "last_run_pending":     lr_pending,
+        "last_run_easy_pending": lr_easy_pending,
+        "last_run_easy_queue":   lr_easy_queue,
         "last_run_skipped":     lr_skipped,
 
         # ── live search counters (update during scanning) ────────────────

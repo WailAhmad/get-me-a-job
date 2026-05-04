@@ -57,7 +57,7 @@ function AppliedCard({ byApp, already, onClick }) {
 }
 
 /* ── Easy Apply card (merged with Already Applied) ───────────── */
-function EasyApplyCard({ easyApplyTotal, newApps, already, scanning, onClick }) {
+function EasyApplyCard({ easyApplyTotal, newApps, already, pending, queued, scanning, onClick }) {
   const total = (easyApplyTotal ?? 0) + (already ?? 0)
   return (
     <button onClick={onClick}
@@ -86,6 +86,16 @@ function EasyApplyCard({ easyApplyTotal, newApps, already, scanning, onClick }) 
           <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(20,184,166,0.14)', color:'#2dd4bf', border:'1px solid rgba(20,184,166,0.28)' }}>
             {newApps ?? 0} applied this run
           </span>
+          {(pending ?? 0) > 0 && (
+            <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(245,158,11,0.14)', color:'#fbbf24', border:'1px solid rgba(245,158,11,0.28)' }}>
+              {pending} pending
+            </span>
+          )}
+          {(queued ?? 0) > 0 && (
+            <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(99,102,241,0.14)', color:'#a5b4fc', border:'1px solid rgba(99,102,241,0.28)' }}>
+              {queued} queued
+            </span>
+          )}
           <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(14,165,233,0.14)', color:'#38bdf8', border:'1px solid rgba(14,165,233,0.28)' }}>
             {already ?? 0} already applied
           </span>
@@ -333,7 +343,7 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
       <SectionLabel tag="Last Run" tagColor="#38bdf8" label="Results from the most recent automation run" />
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(190px,1fr))', gap:12, marginBottom:22 }}>
         <Card title="Matched Jobs"   value={running && stats?.live_found > 0 ? stats?.live_matched : stats?.last_run_matched} sub={running && stats?.live_found > 0 ? `scanning… ${stats?.live_found ?? 0} found so far` : `${(stats?.last_run_easy_apply ?? 0) + (stats?.last_run_already ?? 0)} easy apply · ${stats?.last_run_external ?? 0} external`} icon={Layers3} color="#3b82f6" onClick={() => navigate('/jobs')} />
-        <EasyApplyCard newApps={stats?.last_run_applied ?? 0} easyApplyTotal={running && stats?.live_found > 0 ? stats?.live_easy_apply : (stats?.last_run_easy_apply ?? 0)} already={stats?.last_run_already ?? 0} scanning={running && stats?.live_found > 0} onClick={() => navigate('/jobs')} />
+        <EasyApplyCard newApps={stats?.last_run_applied ?? 0} easyApplyTotal={running && stats?.live_found > 0 ? stats?.live_easy_apply : (stats?.last_run_easy_apply ?? 0)} already={stats?.last_run_already ?? 0} pending={stats?.last_run_easy_pending ?? 0} queued={stats?.last_run_easy_queue ?? 0} scanning={running && stats?.live_found > 0} onClick={() => navigate('/jobs')} />
         <Card title="External"       value={stats?.last_run_external  } sub="no Easy Apply — open manually"                   icon={Globe2}  color="#a78bfa" onClick={() => navigate('/jobs')} />
         <Card title="Failed"         value={stats?.last_run_failed    } sub="Easy Apply errored — see Job Explorer for reason" icon={XCircle} color="#ef4444" onClick={() => navigate('/jobs')} />
         <Card title="Pending Review" value={stats?.last_run_pending   } sub={`${stats?.pending_questions ?? 0} questions · ${stats?.pending_verify ?? 0} to verify`} icon={Clock} color="#f59e0b" onClick={() => navigate('/pending')} />
