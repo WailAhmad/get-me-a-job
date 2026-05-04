@@ -163,6 +163,49 @@ def _missing_preference_followup(prefs_update: dict, current_prefs: dict) -> tup
     return None
 
 
+def _region_label(countries: List[str]) -> str:
+    countries = _dedupe(countries or [])
+    has_gcc = any(c in GCC_COUNTRIES for c in countries)
+    has_europe = any(c in EUROPE_COUNTRIES for c in countries)
+    extra = [c for c in countries if c not in GCC_COUNTRIES + EUROPE_COUNTRIES]
+    if has_gcc and has_europe and not extra:
+        return "GCC + Europe"
+    if has_gcc and not has_europe and not extra:
+        return "GCC"
+    if has_europe and not has_gcc and not extra:
+        return "Europe"
+    if len(countries) == 1:
+        return countries[0]
+    labels = []
+    if has_gcc:
+        labels.append("GCC")
+    if has_europe:
+        labels.append("Europe")
+    labels.extend(extra)
+    return " + ".join(labels) if labels else "Custom"
+
+
+def _merge_country_payload(existing: dict, incoming: dict, mode: str) -> dict:
+    if mode == "add":
+        countries = _dedupe((existing.get("countries") or []) + (incoming.get("countries") or []))
+    else:
+        countries = incoming.get("countries") or []
+    label = _region_label(countries)
+    return {"country": label, "countries": countries, "locations": countries}
+
+
+def _message_mentions_roles(text: str) -> bool:
+    t = (text or "").lower()
+    role_terms = (
+        "role", "roles", "title", "titles", "job", "jobs", "position", "positions",
+        "billing", "invoice", "invoicing", "accounts receivable", "finance",
+        "data", "ai", "artificial intelligence", "machine learning", "analyst",
+        "manager", "director", "head", "chief", "specialist", "engineer",
+        "architect", "product", "governance", "transformation"
+    )
+    return any(term in t for term in role_terms)
+
+
 AI_DATA_ROLES = {
     "head of ai", "head of data", "ai director", "chief data officer",
     "ai product", "ai platform", "ai architect", "data governance",
@@ -363,26 +406,41 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
 
         direct_country_payload = _parse_country_payload(user_msg)
         if direct_country_payload:
-            prefs_update.update(direct_country_payload)
+            edit_words = ("add", "also", "include", "plus", "with", "and")
+            replace_words = ("only", "instead", "replace", "switch", "change to", "set to")
+            lower_msg = user_msg.lower()
+            mode = "add" if any(w in lower_msg for w in edit_words) and not any(w in lower_msg for w in replace_words) else "replace"
+            prefs_update.update(_merge_country_payload(prefs, direct_country_payload, mode))
         else:
             country = prefs_update.get("country")
             if country and not prefs_update.get("countries"):
                 prefs_update.update(_country_payload(country))
 
-        if not prefs_update.get("roles"):
+        if not prefs_update.get("roles") and _message_mentions_roles(user_msg):
             parsed_roles = _parse_roles(user_msg, cv)
             if parsed_roles:
                 prefs_update["roles"] = parsed_roles
         else:
             prefs_update["roles"] = _sanitize_roles(prefs_update.get("roles") or [], cv, user_msg)
 
+        merged_for_ready = {**prefs, **prefs_update}
         if (
-            prefs_update.get("country")
-            and prefs_update.get("recency_days")
-            and prefs_update.get("roles")
+            merged_for_ready.get("country")
+            and merged_for_ready.get("recency_days")
+            and merged_for_ready.get("roles")
         ):
             prefs_update["ready"] = True
             next_step = "ready"
+            if not reply or next_step == "ready":
+                nice = {1: "today", 7: "last week", 14: "last 14 days", 30: "last 30 days"}.get(
+                    merged_for_ready.get("recency_days"),
+                    f"last {merged_for_ready.get('recency_days')} days"
+                )
+                reply = (
+                    f"Updated. I’ll search **{merged_for_ready.get('country')}** for "
+                    f"**{', '.join((merged_for_ready.get('roles') or [])[:4])}** from **{nice}**.\n\n"
+                    "You can keep editing filters here, or run the automation when ready."
+                )
 
         followup = _missing_preference_followup(prefs_update, prefs)
         if followup and not prefs_update.get("ready"):
@@ -416,15 +474,18 @@ def _step_response(step: str, msg: str, s: dict) -> Tuple[str, str, dict]:
 
     existing = s.get("preferences", {}) or {}
     country_update = _parse_country_payload(msg)
+    lower_msg = msg.lower()
+    edit_words = ("add", "also", "include", "plus", "with", "and")
+    replace_words = ("only", "instead", "replace", "switch", "change to", "set to")
+    if country_update:
+        country_mode = "add" if any(w in lower_msg for w in edit_words) and not any(w in lower_msg for w in replace_words) else "replace"
+        country_update = _merge_country_payload(existing, country_update, country_mode)
     country = country_update["country"] if country_update else existing.get("country")
     days = _parse_recency(msg)
     if not days:
         days = existing.get("recency_days")
-    roles = _parse_roles(msg, s.get("cv", {}))
-    if existing.get("roles") and not any(term in msg.lower() for term in (
-        "role", "title", "job", "billing", "data", "ai", "analyst", "manager",
-        "director", "head", "specialist", "engineer", "product"
-    )):
+    roles = _parse_roles(msg, s.get("cv", {})) if _message_mentions_roles(msg) else (existing.get("roles") or [])
+    if existing.get("roles") and not _message_mentions_roles(msg):
         roles = existing.get("roles") or roles
     existing_country_update = None
     if country and not country_update:

@@ -188,6 +188,8 @@ export default function Chat({ cv, onPrefsUpdate }) {
   const noCV  = !cv?.uploaded
   const suggestionChips = !ready && !noCV && step === 'recency'
     ? ['today', 'last week', 'last 14 days', 'last 30 days']
+    : ready && !noCV
+      ? ['add Europe', 'change to last 30 days', 'only GCC', 'add remote']
     : !ready && !noCV && step === 'country'
       ? ['GCC', 'Europe', 'Remote']
       : !ready && !noCV && step === 'roles'
@@ -310,21 +312,45 @@ export default function Chat({ cv, onPrefsUpdate }) {
         </div>
 
         {ready ? (
-          <div style={{
-            display:'flex', gap:10, padding:14, borderRadius:16,
-            background:'linear-gradient(135deg,rgba(99,102,241,0.1),rgba(14,165,233,0.06))',
-            border:'1px solid rgba(99,102,241,0.25)',
-          }}>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>Jobby is ready to go 🎉</div>
-              <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>Your filters are set. Run automation to start applying.</div>
-              {runError && (
-                <div style={{ fontSize:12, color:'#fca5a5', marginTop:6 }}>{runError}</div>
-              )}
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{
+              display:'flex', gap:10, padding:14, borderRadius:16,
+              background:'linear-gradient(135deg,rgba(99,102,241,0.1),rgba(14,165,233,0.06))',
+              border:'1px solid rgba(99,102,241,0.25)',
+            }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>Jobby is ready to go 🎉</div>
+                <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>
+                  Your filters are set. You can still edit them in chat, or run automation now.
+                </div>
+                {runError && (
+                  <div style={{ fontSize:12, color:'#fca5a5', marginTop:6 }}>{runError}</div>
+                )}
+              </div>
+              <button onClick={runAutomation} disabled={startingAutomation} className="btn-primary" style={{ gap:6 }}>
+                <Play size={13} /> {startingAutomation ? 'Starting…' : 'Run Automation'}
+              </button>
             </div>
-            <button onClick={runAutomation} disabled={startingAutomation} className="btn-primary" style={{ gap:6 }}>
-              <Play size={13} /> {startingAutomation ? 'Starting…' : 'Run Automation'}
-            </button>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+              {suggestionChips.map(chip => (
+                <button key={chip} onClick={() => sendSuggestion(chip)} disabled={loading} style={{
+                  border:'1px solid rgba(14,165,233,.25)', background:'rgba(14,165,233,.08)',
+                  color:'#7dd3fc', borderRadius:999, padding:'6px 10px', fontSize:12,
+                  fontWeight:700, cursor:loading?'not-allowed':'pointer',
+                }}>
+                  {chip}
+                </button>
+              ))}
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <input
+                value={input} onChange={e=>setInput(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&send()}
+                placeholder="Edit filters, e.g. add Europe, last 30 days, remove a role…"
+                style={{ flex:1 }}
+              />
+              <button onClick={send} className="btn-primary" disabled={loading}><Send size={14} /></button>
+            </div>
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
