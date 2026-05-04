@@ -207,19 +207,27 @@ def _message_mentions_roles(text: str) -> bool:
 
 
 def _parse_search_keywords(text: str, cv: dict | None = None) -> List[str]:
+    """Extract search keywords from user message.
+
+    Each branch uses `if` (not `elif`) so compound messages like
+    "AI and data and machine learning" correctly capture multiple keywords.
+    """
     t = (text or "").lower()
     keywords: List[str] = []
     if any(phrase in t for phrase in ("ai & data", "data & ai", "ai and data", "data and ai")):
         keywords.append("AI & Data")
-    elif "genai" in t or "generative ai" in t:
+    if "genai" in t or "generative ai" in t:
         keywords.append("Generative AI")
-    elif "machine learning" in t:
+    if "machine learning" in t:
         keywords.append("Machine Learning")
-    elif "data science" in t:
+    if "data science" in t:
         keywords.append("Data Science")
-    elif "billing analyst" in t:
+    if "billing analyst" in t:
         keywords.append("Billing Analyst")
     elif "billing" in t and cv and any(term in " ".join(cv.get("skills") or []).lower() for term in ("billing", "invoice", "invoicing")):
+        # Keep elif here: "billing analyst" is the specific form; plain "billing"
+        # is only added when the CV confirms billing experience and "billing analyst"
+        # wasn't already added.
         keywords.append("Billing")
     return _dedupe(keywords)
 

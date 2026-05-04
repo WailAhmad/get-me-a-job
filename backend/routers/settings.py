@@ -202,9 +202,9 @@ def set_key(key: str, body: dict):
     """Persist arbitrary preference keys to state (salary, notice_period, etc.)."""
     value = body.get("value")
     _PREF_KEYS = {
-        "salary_expectation", "notice_period", "work_authorization",
+        "salary_expectation", "current_salary", "notice_period", "work_authorization",
         "visa_sponsorship", "relocation", "daily_cap", "hourly_cap",
-        "recency_days", "country", "city", "roles",
+        "recency_days", "country", "city", "roles", "education_level",
     }
 
     def m(s):

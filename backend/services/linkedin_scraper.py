@@ -184,6 +184,18 @@ def fetch_job_description(driver, url: str, timeout: int = 8) -> str:
     if "/login" in cur or "/checkpoint" in cur or "/uas/login" in cur:
         raise PermissionError("LinkedIn session is not valid (redirected to login)")
 
+    # CAPTCHA overlay detection — LinkedIn can present a challenge on the job
+    # URL itself without redirecting. Detect it before reading page content.
+    try:
+        page_src = (driver.page_source or "").lower()
+        _captcha_signals = ("recaptcha", "cf-challenge", "cf_chl_", "challenge-form",
+                            "please verify you are a human", "security check")
+        if any(sig in page_src for sig in _captcha_signals):
+            logger.warning("fetch_job_description: CAPTCHA detected for %s — skipping", url)
+            return ""
+    except Exception:
+        pass
+
     selectors = [
         ".jobs-description__content",
         ".jobs-box__html-content",
@@ -211,7 +223,9 @@ def fetch_job_description(driver, url: str, timeout: int = 8) -> str:
     if not chunks:
         try:
             page = (driver.find_element(By.TAG_NAME, "body").text or "").strip()
-            if page:
+            # Only use body fallback if the page looks like real job content
+            # (>500 chars). CAPTCHA / error pages are typically much shorter.
+            if page and len(page) > 500:
                 chunks.append(page)
         except Exception:
             pass
@@ -406,13 +420,14 @@ def _extract_card(card, By) -> Optional[dict]:
         except Exception:
             pass
 
-        # Detect if user already applied (LinkedIn shows "Applied" badge)
+        # Detect if user already applied (LinkedIn shows "Applied" badge).
+        # Do NOT force easy=True here — the "Applied" badge also appears for
+        # externally submitted jobs, which were never Easy Apply.
         already_applied = False
         try:
             blob = (card.text or "").lower()
             if re.search(r"\bapplied\b", blob) and "easy apply" not in blob.split("applied")[0][-20:]:
                 already_applied = True
-                easy = True
         except Exception:
             pass
 

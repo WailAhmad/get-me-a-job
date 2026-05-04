@@ -230,6 +230,11 @@ _BLACKLIST = [
     "maritime", "shipping", "vessel", "marine",
 ]
 
+# Compiled word-boundary pattern cache for short keyword matching in _score().
+# Module-level so patterns survive across calls (avoid recompilation).
+import re as _re
+_boundary_cache: dict = {}
+
 # Valid GCC + common target locations
 _GCC_LOCATIONS = [
     "uae", "united arab emirates", "dubai", "abu dhabi", "sharjah", "ajman",
@@ -313,14 +318,12 @@ def _score(job: dict, cv: dict, prefs: dict = None) -> int:
 
     # Helper: match with word boundaries for short keywords to avoid false positives
     # e.g. "ai" should NOT match inside "Majid", "it" should NOT match inside "Deloitte"
-    import re
-    _boundary_cache = {}
     def _kw_in(kw, text):
         if len(kw.strip()) <= 3:
-            # Use word boundary for short keywords
+            # Use word boundary for short keywords; cache is module-level
             pattern = _boundary_cache.get(kw)
             if not pattern:
-                pattern = re.compile(r'\b' + re.escape(kw.strip()) + r'\b', re.IGNORECASE)
+                pattern = _re.compile(r'\b' + _re.escape(kw.strip()) + r'\b', _re.IGNORECASE)
                 _boundary_cache[kw] = pattern
             return bool(pattern.search(text))
         return kw in text
@@ -657,7 +660,9 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
 
     # Title-only scoring is fast but can be wrong. Enrich plausible jobs with
     # the LinkedIn job description, then rescore before deciding apply/external.
-    to_enrich = [j for j in out if _should_enrich_description(j)][:60]
+    # Cap at 25 to avoid LinkedIn session timeout (~30 min idle) during long runs.
+    # Each enrichment fetches one page (~8-18s), so 25 ≈ 4-7 minutes worst case.
+    to_enrich = [j for j in out if _should_enrich_description(j)][:25]
     if to_enrich:
         _push("info", f"📖 Reading job descriptions for {len(to_enrich)} promising/borderline jobs…")
         desc_driver = None
