@@ -102,8 +102,7 @@ def answer_pending(job_id: str, body: AnswerIn):
         raise HTTPException(400, "This job does not have a verified live source URL yet, so it cannot be marked as applied.")
     question = job.get("pending_question") or ""
 
-    def m(st):
-        # save the answer to the Q&A bank for re-use
+    def save_answer(st):
         if body.save_to_bank and question:
             existing = next((a for a in st["answers"] if a["question"].lower() == question.lower()), None)
             if existing:
@@ -116,16 +115,62 @@ def answer_pending(job_id: str, body: AnswerIn):
                     "answer": body.answer,
                     "created_at": time.time(),
                 })
-        # apply the job
+    state.update(save_answer)
+
+    # Retry the real LinkedIn Easy Apply flow. Do not mark the job applied unless
+    # LinkedIn submission is verified by the applier.
+    try:
+        from backend.routers.automation import _live_apply_easy, _is_infrastructure_apply_error
+        result = _live_apply_easy(job)
+    except Exception as exc:
+        result = {"status": "error", "error": str(exc), "pending_question": None}
+
+    status = result.get("status")
+    if status == "submitted":
+        def mark_applied(st):
+            j = st["jobs"]["items"][job_id]
+            j["status"] = "applied"
+            j["applied_at"] = time.time()
+            j["submission_verified"] = True
+            j.pop("pending_question", None)
+            j.pop("pending_kind", None)
+            if job_id not in st["applied_ids"]:
+                st["applied_ids"].append(job_id)
+        state.update(mark_applied)
+        state.push_log("success", f"✅ Answered & submitted application to '{job['title']}' at {job['company']}.")
+        return {"success": True, "status": "submitted"}
+
+    if status == "not_easy_apply":
+        def mark_external(st):
+            j = st["jobs"]["items"][job_id]
+            j["easy_apply"] = False
+            j["status"] = "external"
+            j.pop("pending_question", None)
+            j.pop("pending_kind", None)
+        state.update(mark_external)
+        state.push_log("external", f"🌐 '{job['title']}' at {job['company']} is not Easy Apply after retry — moved to External.")
+        return {"success": False, "status": "external", "message": "Job is no longer Easy Apply."}
+
+    err = result.get("error") or ""
+    pending_question = result.get("pending_question") or err or "Easy Apply still needs review"
+    if status == "pending" or not _is_infrastructure_apply_error(err):
+        def keep_pending(st):
+            j = st["jobs"]["items"][job_id]
+            j["status"] = "pending"
+            j["pending_question"] = pending_question
+            j["pending_kind"] = "answer"
+            j["error"] = None
+        state.update(keep_pending)
+        state.push_log("pending", f"⏸️ '{job['title']}' at {job['company']} still needs review: \"{pending_question}\".")
+        return {"success": False, "status": "pending", "message": pending_question}
+
+    def mark_failed(st):
         j = st["jobs"]["items"][job_id]
-        j["status"] = "applied"
-        j["applied_at"] = time.time()
-        j.pop("pending_question", None)
-        if job_id not in st["applied_ids"]:
-            st["applied_ids"].append(job_id)
-    state.update(m)
-    state.push_log("success", f"✅ Answered & applied to '{job['title']}' at {job['company']}.")
-    return {"success": True}
+        j["status"] = "failed"
+        j["error"] = err
+    state.update(mark_failed)
+    state.push_log("warn", f"⚠️ Retry failed for '{job['title']}' at {job['company']}: {err}")
+    return {"success": False, "status": "failed", "message": err}
 
 
 @router.delete("/{job_id}")

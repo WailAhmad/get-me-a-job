@@ -7,6 +7,7 @@ export default function PendingReview({ onAnswered }) {
   const [drafts, setDrafts] = useState({})    // jobId -> answer
   const [savePref, setSavePref] = useState({}) // jobId -> save_to_bank
   const [busy, setBusy] = useState({})
+  const [messages, setMessages] = useState({})
 
   const load = async () => { try { setJobs(await getPendingJobs()) } catch {} }
   useEffect(() => { load() }, [])
@@ -15,10 +16,18 @@ export default function PendingReview({ onAnswered }) {
     const ans = drafts[job.id]
     if (!ans?.trim()) return
     setBusy(b => ({ ...b, [job.id]: true }))
+    setMessages(m => ({ ...m, [job.id]: '' }))
     try {
-      await answerPendingJob(job.id, ans.trim(), savePref[job.id] !== false)
-      setJobs(j => j.filter(x => x.id !== job.id))
-      onAnswered && onAnswered()
+      const result = await answerPendingJob(job.id, ans.trim(), savePref[job.id] !== false)
+      if (result?.success) {
+        setJobs(j => j.filter(x => x.id !== job.id))
+        onAnswered && onAnswered()
+      } else {
+        setMessages(m => ({ ...m, [job.id]: result?.message || 'LinkedIn still needs review.' }))
+        await load()
+      }
+    } catch (e) {
+      setMessages(m => ({ ...m, [job.id]: e?.response?.data?.detail || e.message || 'Retry failed.' }))
     } finally { setBusy(b => ({ ...b, [job.id]: false })) }
   }
 
@@ -83,6 +92,9 @@ export default function PendingReview({ onAnswered }) {
                 )}
 
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+                  {messages[j.id] && (
+                    <div style={{ width:'100%', fontSize:12, color:'#fbbf24', marginBottom:4 }}>{messages[j.id]}</div>
+                  )}
                   {j.pending_kind !== 'verify_source' && (
                     <>
                       <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#94a3b8', cursor:'pointer' }}>

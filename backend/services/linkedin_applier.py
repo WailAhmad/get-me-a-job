@@ -1548,6 +1548,45 @@ def _pending_result(question: str, new_answers: List[dict], error: str = None) -
     }
 
 
+def _field_pending_label(field: dict) -> str:
+    label = (field.get("label") or field.get("id") or "required field").strip()
+    ftype = (field.get("type") or "field").strip()
+    options = [str(o).strip() for o in (field.get("options") or []) if str(o).strip()]
+    if options:
+        return f"{label} ({ftype}; options: {', '.join(options[:8])})"
+    return f"{label} ({ftype})"
+
+
+def _selection_pending_question(driver, By, snap: dict, fallback: str) -> str:
+    """Turn generic LinkedIn validation into a user-actionable pending prompt."""
+    fields = list((snap or {}).get("fields") or [])
+    selection_types = {"select", "combobox", "radio", "checkbox", "typeahead"}
+    candidates = []
+    for f in fields:
+        if (f.get("type") or "").lower() not in selection_types:
+            continue
+        if not f.get("required") and (f.get("type") or "").lower() not in {"select", "combobox", "radio"}:
+            continue
+        try:
+            if _field_satisfied(driver, By, f):
+                continue
+        except Exception:
+            pass
+        candidates.append(f)
+
+    if candidates:
+        if len(candidates) == 1:
+            return f"Please answer: {_field_pending_label(candidates[0])}"
+        joined = "; ".join(_field_pending_label(f) for f in candidates[:4])
+        return f"Please answer one of these required selections: {joined}"
+
+    errors = "; ".join((snap or {}).get("validation_errors") or []) or fallback
+    page = (snap or {}).get("step_title") or ""
+    if page:
+        return f"{page}: {errors}"
+    return errors
+
+
 def _field_satisfied(driver, By, field: dict) -> bool:
     """Best-effort verification that a required field now has a value/selection."""
     el = field.get("element")
@@ -1743,8 +1782,9 @@ def apply_easy(
             errors = snap.get("validation_errors") or []
             err_detail = "; ".join(errors) if errors else "form won't advance — unknown required field"
             logger.warning("Page stuck after 3 retries: %s", err_detail)
+            pending_question = _selection_pending_question(driver, By, snap, err_detail)
             _close_modal(driver, By)
-            return _pending_result(f"Form field we couldn't fill: {err_detail}", new_answers)
+            return _pending_result(pending_question, new_answers, f"Form field we couldn't fill: {err_detail}")
 
         # ── 1. Resolve every field ────────────────────────────────────────
         # Order: profile → bank → LLM (one call for all remaining)
@@ -1845,7 +1885,7 @@ def apply_easy(
                     else:
                         failed_required = still_failed
             if failed_required:
-                labels = ", ".join((f.get("label") or "required field") for f in failed_required)
+                labels = "; ".join(_field_pending_label(f) for f in failed_required)
                 _close_modal(driver, By)
                 return _pending_result(
                     f"Required Easy Apply field did not accept an answer: {labels}",
