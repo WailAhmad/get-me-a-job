@@ -569,8 +569,18 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
 
     def _score_and_stage(j):
         """Score one job and add to output."""
-        if j["id"] in existing:
-            return
+        previous = existing.get(j["id"])
+        if previous:
+            # A LinkedIn job can appear in many runs. Do not hide it from the
+            # current run just because we saw the same job id earlier; refresh
+            # the searchable fields and rescore against the current CV/prefs.
+            preserved_status = previous.get("status")
+            j = {**previous, **j}
+            j["rediscovered"] = True
+            if preserved_status in {"applied", "already_applied", "pending", "failed", "external"}:
+                j["status"] = preserved_status
+            elif preserved_status == "skipped":
+                j["status"] = "discovered"
         j["discovered_at"] = time.time()
         j["apply_type"] = "Easy Apply" if j.get("easy_apply") else "External Apply"
         j["score"] = _score(j, cv, prefs)
@@ -898,6 +908,21 @@ def _engine_loop():
         # Skip already-applied jobs (detected from LinkedIn "Applied" badge)
         if job.get("status") == "already_applied":
             _push("info", f"✅ '{job['title']}' at {job['company']} — already applied ({job['score']}% match).")
+            time.sleep(0.15)
+            continue
+
+        if job.get("status") == "applied":
+            _push("info", f"✅ '{job['title']}' at {job['company']} — already submitted in JobsLand ({job['score']}% match).")
+            time.sleep(0.15)
+            continue
+
+        if job.get("status") == "pending":
+            _push("pending", f"⏸️ '{job['title']}' at {job['company']} — still waiting in Pending Review.")
+            time.sleep(0.15)
+            continue
+
+        if job.get("status") == "failed":
+            _push("warn", f"⚠️ '{job['title']}' at {job['company']} — previously failed; leaving it in Failed for review.")
             time.sleep(0.15)
             continue
 
