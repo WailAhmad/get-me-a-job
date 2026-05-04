@@ -58,10 +58,16 @@ def set_live_mode(body: dict):
 
 @router.get("/ai-providers")
 def ai_providers():
+    from backend.config import AI_PROVIDER, AI_MODEL, AI_BASE_URL
     return [
-        {"id": "anthropic", "label": "Anthropic Claude"},
-        {"id": "openai",    "label": "OpenAI"},
-        {"id": "ollama",    "label": "Ollama (local)"},
+        {"id": "groq",      "label": "Groq (llama-3.3-70b-versatile)", "default": True,
+         "active": AI_PROVIDER.lower() == "groq"},
+        {"id": "openai",    "label": "OpenAI (gpt-4o)",
+         "active": AI_PROVIDER.lower() == "openai"},
+        {"id": "anthropic", "label": "Anthropic Claude (claude-3-5-sonnet)",
+         "active": AI_PROVIDER.lower() == "anthropic"},
+        {"id": "ollama",    "label": "Ollama (local / self-hosted)",
+         "active": AI_PROVIDER.lower() == "ollama"},
     ]
 
 
@@ -172,7 +178,31 @@ def clear_session():
     return {"success": True, "message": "Session cleared"}
 
 
-# ── Catch-all (MUST be last so it doesn't shadow specific routes) ─────
+# ── Generic key-value store (preferences, caps, etc.) — MUST be last ──
+@router.get("/{key}")
+def get_key(key: str):
+    s = state.get()
+    prefs = s.get("preferences", {})
+    if key in prefs:
+        return {"key": key, "value": prefs[key]}
+    return {"key": key, "value": s.get(key)}
+
+
 @router.put("/{key}")
 def set_key(key: str, body: dict):
-    return {"success": True, "key": key, "value": body.get("value")}
+    """Persist arbitrary preference keys to state (salary, notice_period, etc.)."""
+    value = body.get("value")
+    _PREF_KEYS = {
+        "salary_expectation", "notice_period", "work_authorization",
+        "visa_sponsorship", "relocation", "daily_cap", "hourly_cap",
+        "recency_days", "country", "city", "roles",
+    }
+
+    def m(s):
+        if key in _PREF_KEYS:
+            s.setdefault("preferences", {})[key] = value
+        else:
+            s[key] = value
+
+    state.update(m)
+    return {"success": True, "key": key, "value": value}

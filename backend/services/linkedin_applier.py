@@ -759,12 +759,16 @@ def _profile_answer(ll: str, cv: dict, profile: dict) -> Optional[str]:
     # 18 years / age
     if "18" in ll and ("age" in ll or "years" in ll or "older" in ll):
         return "yes"
-    # Expected salary — broad match
+    # Expected salary — read from cv/profile, don't guess if not stored
+    _sal_expected = (str(cv.get("salary_expectation") or "").strip()
+                     or str(profile.get("salary_expectation") or "").strip())
+    _sal_current  = (str(cv.get("current_salary") or "").strip()
+                     or str(profile.get("current_salary") or "").strip())
     if "salary" in ll and ("expected" in ll or "desired" in ll):
-        return "55000"
+        return _sal_expected or None
     # Current salary
     if ("current" in ll or "present" in ll) and "salary" in ll:
-        return "0"
+        return _sal_current or None
     # LinkedIn URL — handle many label variants
     if "linkedin" in ll:
         return cv.get("linkedin") or contact.get("linkedin") or profile.get("linkedin") or None
@@ -792,14 +796,14 @@ def _profile_answer(ll: str, cv: dict, profile: dict) -> Optional[str]:
         return "no"
     if "available to start" in ll or "start date" in ll or "earliest" in ll:
         return "30 days"
-    # Salary — catch ALL variants
+    # Salary — catch ALL variants; read from cv/profile or let AI handle
     if "salary" in ll or "compensation" in ll or "pay" in ll:
         if "current" in ll or "present" in ll:
-            return "0"
-        return "55000"
+            return _sal_current or None
+        return _sal_expected or None
     # CTC / package
     if "ctc" in ll or "package" in ll:
-        return "55000"
+        return _sal_expected or None
     # Cover letter (optional — provide brief one)
     if "cover letter" in ll or "cover_letter" in ll:
         summary = (cv.get("summary") or "").strip()

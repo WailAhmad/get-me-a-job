@@ -109,8 +109,9 @@ def answer_pending(job_id: str, body: AnswerIn):
             if existing:
                 existing["answer"] = body.answer
             else:
+                next_id = max((a.get("id") or 0 for a in st["answers"]), default=0) + 1
                 st["answers"].append({
-                    "id": len(st["answers"]) + 1,
+                    "id": next_id,
                     "question": question,
                     "answer": body.answer,
                     "created_at": time.time(),

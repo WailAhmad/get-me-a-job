@@ -27,8 +27,10 @@ def save(body: AnswerIn):
         if existing:
             existing["answer"] = body.answer
         else:
+            # Use max existing id + 1 to avoid ID collisions after deletes
+            next_id = max((a.get("id") or 0 for a in st["answers"]), default=0) + 1
             st["answers"].append({
-                "id": len(st["answers"]) + 1,
+                "id": next_id,
                 "question": body.question,
                 "answer": body.answer,
                 "created_at": time.time(),

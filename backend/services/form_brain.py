@@ -119,21 +119,49 @@ def profile_lookup(label: str, cv: dict, profile: dict) -> Optional[str]:
     if "nationality" in ll or "citizenship" in ll:
         return cv.get("nationality") or profile.get("nationality") or None
 
-    # Notice period
+    # Notice period — read from cv/profile, sensible default
     if "notice" in ll and ("period" in ll or "day" in ll or "month" in ll):
-        return "30"
+        val = (cv.get("notice_period") or profile.get("notice_period") or "").strip()
+        return val if val else "30"
 
-    # Education
+    # Education — derive highest degree from CV education list
+    edu_list = cv.get("education") or []
+    def _highest_degree() -> str:
+        """Scan cv.education for the highest academic credential."""
+        combined = " ".join(
+            " ".join([
+                str(e.get("degree") or ""),
+                str(e.get("field") or ""),
+                str(e.get("institution") or ""),
+            ]).lower()
+            for e in edu_list
+            if isinstance(e, dict)
+        )
+        if not combined:
+            combined = " ".join(str(e).lower() for e in edu_list)
+        if "phd" in combined or "ph.d" in combined or "doctor" in combined:
+            return "PhD"
+        if "master" in combined or "msc" in combined or "mba" in combined or "m.sc" in combined:
+            return "Master's"
+        if "bachelor" in combined or "bsc" in combined or "b.sc" in combined or "b.s" in combined:
+            return "Bachelor's"
+        if "diploma" in combined or "associate" in combined:
+            return "Diploma"
+        return "Bachelor's"   # safe default
+
     if ("bachelor" in ll) and ("education" in ll or "degree" in ll or "level" in ll or "completed" in ll):
-        return "Yes"
+        deg = _highest_degree()
+        return "Yes" if deg in ("Bachelor's", "Master's", "PhD") else "No"
     if "highest" in ll and ("education" in ll or "qualification" in ll or "degree" in ll):
-        return "PhD"
+        return _highest_degree()
     if "level of education" in ll or "education level" in ll:
-        return "PhD"
+        return _highest_degree()
     if "master" in ll and ("degree" in ll or "education" in ll):
-        return "Yes"
+        deg = _highest_degree()
+        return "Yes" if deg in ("Master's", "PhD") else "No"
     if ("phd" in ll or "doctor" in ll or "doctorate" in ll) and ("degree" in ll or "education" in ll):
-        return "Yes"
+        deg = _highest_degree()
+        return "Yes" if deg == "PhD" else "No"
 
     # Work authorisation / sponsorship / commute / background
     if ("authorized" in ll or "authorised" in ll or "authorization" in ll or "right to work" in ll) and "work" in ll:
@@ -155,14 +183,22 @@ def profile_lookup(label: str, cv: dict, profile: dict) -> Optional[str]:
     if "18" in ll and ("age" in ll or "years" in ll or "older" in ll):
         return "Yes"
 
-    # Salary
+    # Salary — read from cv/profile preferences; don't guess if not set
+    _sal_expected = (
+        str(cv.get("salary_expectation") or "").strip()
+        or str(profile.get("salary_expectation") or "").strip()
+    )
+    _sal_current = (
+        str(cv.get("current_salary") or "").strip()
+        or str(profile.get("current_salary") or "").strip()
+    )
     if "expected" in ll and "salary" in ll:
-        return "55000"
+        return _sal_expected or None
     if ("current" in ll or "present" in ll) and "salary" in ll:
-        return "0"
+        return _sal_current or None
     if ll in ("expected salary", "salary expectation", "salary expectations",
               "expected monthly salary", "expected annual salary"):
-        return "55000"
+        return _sal_expected or None
 
     # LinkedIn URL
     if "linkedin" in ll and ("url" in ll or "profile" in ll or "link" in ll):

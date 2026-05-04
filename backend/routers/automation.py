@@ -280,18 +280,18 @@ def _score(job: dict, cv: dict, prefs: dict = None) -> int:
     title = (job.get("title") or "").lower()
 
     if not title or title == "unknown role":
-        return random.randint(25, 40)
+        return 25
 
     text = title + " " + (job.get("company") or "").lower()
 
     # ── Hard blacklist check ──
     for bl in _BLACKLIST:
         if bl in title:
-            return random.randint(10, 30)
+            return 15
 
     # ── Location check ──
     if prefs and not _location_matches_criteria(job, prefs):
-        return random.randint(15, 30)
+        return 20
 
     # Helper: match with word boundaries for short keywords to avoid false positives
     # e.g. "ai" should NOT match inside "Majid", "it" should NOT match inside "Deloitte"
@@ -337,19 +337,18 @@ def _score(job: dict, cv: dict, prefs: dict = None) -> int:
     # BUT cap at 50 so they never auto-qualify as "strong match" without domain relevance
     if primary_count == 0:
         if seniority_score >= 14:  # Director, VP, Chief level
-            raw = 30 + seniority_score // 2 + modifier_score + skill_score + random.randint(-2, 2)
+            raw = 30 + seniority_score // 2 + modifier_score + skill_score
             return max(20, min(50, raw))  # Cap at 50 — never reaches 60 threshold
-        return max(15, min(35, 20 + modifier_score + seniority_score // 3 + random.randint(-3, 3)))
+        return max(15, min(35, 20 + modifier_score + seniority_score // 3))
 
     # AI/data keywords alone are not enough: IC/specialist roles without any
     # seniority signal should stay below the application threshold.
     if seniority_score == 0:
-        raw = 35 + min(primary_score, 18) + min(modifier_score, 4) + skill_score + random.randint(-2, 2)
+        raw = 35 + min(primary_score, 18) + min(modifier_score, 4) + skill_score
         return max(25, min(58, raw))
 
     # ── Combine: base 40 + primary + modifier bonus + seniority + skills ──
     raw = 40 + min(primary_score, 28) + min(modifier_score, 10) + seniority_score + skill_score
-    raw += random.randint(-3, 4)
 
     return max(15, min(98, raw))
 

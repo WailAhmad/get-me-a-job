@@ -307,11 +307,16 @@ def _validation_errors(driver, By, modal) -> List[str]:
     return errors
 
 
-def _step_title(modal) -> str:
+def _step_title(modal, By=None) -> str:
+    """Extract the step heading from the modal using the modern Selenium 4 API."""
+    if modal is None:
+        return ""
     try:
+        from selenium.webdriver.common.by import By as _By
+        _by = By or _By
         for sel in ["h3", "h2", "h1", "[role='heading']"]:
             try:
-                for h in modal.find_elements_by_css_selector(sel) if hasattr(modal, "find_elements_by_css_selector") else []:
+                for h in modal.find_elements(_by.CSS_SELECTOR, sel):
                     t = (h.text or "").strip()
                     if t:
                         return t[:80]

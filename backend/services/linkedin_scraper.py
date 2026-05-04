@@ -47,7 +47,7 @@ GEO_IDS = {
     "bahrain": "100425431",
     "oman": "103619019",
     "egypt": "106155005",
-    "jordan": "106155005",
+    "jordan": "101282786",
     "united kingdom": "101165590",
     "uk": "101165590",
     "united states": "103644278",

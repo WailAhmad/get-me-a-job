@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getPendingJobs, answerPendingJob } from '../api/client'
-import { Clock, Send, BookmarkPlus, ShieldAlert } from 'lucide-react'
+import { getPendingJobs, answerPendingJob, dismissJob } from '../api/client'
+import { Clock, Send, BookmarkPlus, ShieldAlert, Trash2 } from 'lucide-react'
 
 export default function PendingReview({ onAnswered }) {
   const [jobs, setJobs] = useState([])
@@ -22,6 +22,13 @@ export default function PendingReview({ onAnswered }) {
     } finally { setBusy(b => ({ ...b, [job.id]: false })) }
   }
 
+  const dismiss = async (jobId) => {
+    try {
+      await dismissJob(jobId)
+      setJobs(j => j.filter(x => x.id !== jobId))
+    } catch {}
+  }
+
   return (
     <div className="animate-fade-in">
       <h1 className="page-title">Pending Review</h1>
@@ -38,11 +45,20 @@ export default function PendingReview({ onAnswered }) {
             {jobs.map(j => (
               <div key={j.id} className="card">
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14, gap:10 }}>
-                  <div>
+                  <div style={{ minWidth:0, flex:1 }}>
                     <div style={{ fontSize:14, fontWeight:600, color:'#f1f5f9' }}>{j.title}</div>
                     <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>{j.company} · {j.location} · {j.score}% match</div>
                   </div>
-                  <span className="badge" style={{ background:'rgba(245,158,11,.1)', color:'#fbbf24', border:'1px solid rgba(245,158,11,.25)' }}>Needs your answer</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                    <span className="badge" style={{ background:'rgba(245,158,11,.1)', color:'#fbbf24', border:'1px solid rgba(245,158,11,.25)' }}>Needs your answer</span>
+                    <button
+                      onClick={() => dismiss(j.id)}
+                      title="Dismiss this job"
+                      style={{ background:'none', border:'1px solid rgba(255,255,255,0.07)', borderRadius:8, padding:'5px 7px', color:'#475569', cursor:'pointer', display:'flex', alignItems:'center' }}
+                    >
+                      <Trash2 size={13}/>
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ padding:12, borderRadius:12, background:'rgba(245,158,11,0.05)', border:'1px solid rgba(245,158,11,0.18)', marginBottom:10 }}>

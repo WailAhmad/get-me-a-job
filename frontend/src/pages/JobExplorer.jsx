@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getJobs, dismissJob } from '../api/client'
-import { Search, ExternalLink, Briefcase, RefreshCw, Trash2, CheckCircle2, Globe2, Send, Zap, XCircle, AlertTriangle } from 'lucide-react'
+import { getJobs, dismissJob, getLiveMode } from '../api/client'
+import { useNavigate } from 'react-router-dom'
+import { Search, ExternalLink, Briefcase, RefreshCw, Trash2, CheckCircle2, Globe2, Send, Zap, XCircle, AlertTriangle, PlugZap } from 'lucide-react'
 
 /* ───────────────────────── helpers ───────────────────────── */
 const scoreColor = (s) => s >= 85 ? '#34d399' : s >= 70 ? '#38bdf8' : '#fbbf24'
@@ -15,7 +16,7 @@ const scoreColor = (s) => s >= 85 ? '#34d399' : s >= 70 ? '#38bdf8' : '#fbbf24'
  *   external     : No Easy Apply — must be opened on the open web
  *   null         : Skipped / dropped — not surfaced anywhere
  */
-const SUITABLE_MIN_SCORE = 70
+const SUITABLE_MIN_SCORE = 60   // matches backend scoring threshold
 
 /** Parse a raw error string into a short human-readable reason. */
 function parseFailReason(err) {
@@ -111,13 +112,23 @@ function ApplyBadge({ kind }) {
 
 /* ───────────────────────── page ───────────────────────── */
 export default function JobExplorer() {
+  const navigate = useNavigate()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [bucket, setBucket] = useState('suitable')   // default to the queue
   const [visible, setVisible] = useState(60)
+  const [liveMode, setLiveMode] = useState(null)
 
-  const load = async () => { setLoading(true); try { setJobs(await getJobs()) } catch {} finally { setLoading(false) } }
+  const load = async () => {
+    setLoading(true)
+    try {
+      const [j, lm] = await Promise.all([getJobs(), getLiveMode().catch(() => null)])
+      setJobs(j)
+      if (lm) setLiveMode(lm)
+    } catch {}
+    setLoading(false)
+  }
   useEffect(() => { load() }, [])
   useEffect(() => { setVisible(60) }, [bucket, query])
 
@@ -172,12 +183,29 @@ export default function JobExplorer() {
         />
       </div>
 
+      {/* ─── Not-connected / no-jobs setup banner ─── */}
+      {!loading && jobs.length === 0 && liveMode && !liveMode.linkedin_session && (
+        <div style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderRadius:14, marginBottom:18,
+          background:'rgba(59,130,246,0.06)', border:'1px solid rgba(59,130,246,0.20)' }}>
+          <PlugZap size={20} style={{ color:'#60a5fa', flexShrink:0 }} />
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#93c5fd', marginBottom:2 }}>LinkedIn not connected</div>
+            <div style={{ fontSize:12, color:'#64748b', lineHeight:1.5 }}>
+              Connect your LinkedIn account to start discovering and applying to jobs. Once connected, run automation from the Dashboard.
+            </div>
+          </div>
+          <button onClick={() => navigate('/settings')} className="btn-primary" style={{ whiteSpace:'nowrap', padding:'8px 14px', fontSize:12 }}>
+            Connect →
+          </button>
+        </div>
+      )}
+
       {/* ─── four category cards (also act as filters) ─── */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12, marginBottom:18 }}>
         <SummaryCard
           label="Easy Apply — Suitable"
           value={counts.suitable}
-          sub="Score ≥ 70 · queue, including jobs you already clicked"
+          sub="Score ≥ 60 · queue, including jobs you already clicked"
           icon={CheckCircle2} color="#10b981"
           active={bucket === 'suitable'} onClick={() => setBucket('suitable')}
         />
