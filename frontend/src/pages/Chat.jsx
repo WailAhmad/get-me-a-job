@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { sendChat, getChat, resetChat } from '../api/client'
+import { sendChat, getChat, resetChat, startAutomation } from '../api/client'
 import { Send, Bot, RefreshCw, Play, MapPin, Calendar, Briefcase, Globe, Filter, Sparkles, CheckCircle2 } from 'lucide-react'
 
 function renderText(text) {
@@ -30,6 +30,7 @@ function FilterSidebar({ prefs }) {
   if (roles.length) {
     filters.push({ icon: Briefcase, label: 'Target Roles', value: `${roles.length} role${roles.length>1?'s':''}`, color: '#0ea5e9', items: roles })
   }
+  const missing = !country ? 'region' : !days ? 'timeframe' : !roles.length ? 'target roles' : 'preferences'
 
   return (
     <div style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
@@ -118,7 +119,7 @@ function FilterSidebar({ prefs }) {
           animation: ready ? 'none' : 'pulse 2s infinite',
         }} />
         <span style={{ fontSize: 11, fontWeight: 600, color: ready ? '#34d399' : '#fbbf24' }}>
-          {ready ? 'Filters ready — launch automation' : 'Waiting for preferences…'}
+          {ready ? 'Filters ready — launch automation' : `Waiting for ${missing}…`}
         </span>
       </div>
     </div>
@@ -131,6 +132,8 @@ export default function Chat({ cv, onPrefsUpdate }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [startingAutomation, setStartingAutomation] = useState(false)
+  const [runError, setRunError] = useState('')
   const [step, setStep] = useState('greet')
   const [prefs, setPrefs] = useState(null)
   const endRef = useRef(null)
@@ -183,6 +186,47 @@ export default function Chat({ cv, onPrefsUpdate }) {
 
   const ready = step === 'ready' && prefs?.ready
   const noCV  = !cv?.uploaded
+  const suggestionChips = !ready && !noCV && step === 'recency'
+    ? ['today', 'last week', 'last 14 days', 'last 30 days']
+    : !ready && !noCV && step === 'country'
+      ? ['GCC', 'Europe', 'Remote']
+      : !ready && !noCV && step === 'roles'
+        ? ['match my CV', 'Head of Data', 'AI Director']
+        : []
+
+  const sendSuggestion = async (text) => {
+    if (loading) return
+    setInput(text)
+    const msg = text.trim()
+    setMessages(m => [...m, { role:'user', content:msg }])
+    setLoading(true)
+    try {
+      const r = await sendChat(msg)
+      setMessages(m => [...m, { role:'assistant', content: r.reply }])
+      setStep(r.step); setPrefs(r.preferences)
+      onPrefsUpdate && onPrefsUpdate(r.preferences)
+    } catch (e) {
+      setMessages(m => [...m, { role:'assistant', content:`Error: ${e.message}` }])
+    } finally {
+      setInput('')
+      setLoading(false)
+    }
+  }
+
+  const runAutomation = async () => {
+    if (startingAutomation) return
+    setRunError('')
+    setStartingAutomation(true)
+    try {
+      await startAutomation()
+      navigate('/')
+    } catch (e) {
+      const detail = e?.response?.data?.detail || e.message || 'Could not start automation.'
+      setRunError(detail)
+    } finally {
+      setStartingAutomation(false)
+    }
+  }
 
   return (
     <div style={{ display:'flex', gap: 20, height:'calc(100vh - 80px)' }}>
@@ -274,24 +318,39 @@ export default function Chat({ cv, onPrefsUpdate }) {
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>Jobby is ready to go 🎉</div>
               <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>Your filters are set. Run automation to start applying.</div>
+              {runError && (
+                <div style={{ fontSize:12, color:'#fca5a5', marginTop:6 }}>{runError}</div>
+              )}
             </div>
-            <button onClick={async () => {
-              try { await fetch('/api/automation/start', { method:'POST' }) } catch {}
-              navigate('/')
-            }} className="btn-primary" style={{ gap:6 }}>
-              <Play size={13} /> Run Automation
+            <button onClick={runAutomation} disabled={startingAutomation} className="btn-primary" style={{ gap:6 }}>
+              <Play size={13} /> {startingAutomation ? 'Starting…' : 'Run Automation'}
             </button>
           </div>
         ) : (
-          <div style={{ display:'flex', gap:8 }}>
-            <input
-              value={input} onChange={e=>setInput(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&send()}
-              placeholder={noCV ? 'Upload your CV first…' : 'Tell Jobby what you\'re looking for…'}
-              disabled={noCV}
-              style={{ flex:1 }}
-            />
-            <button onClick={send} className="btn-primary" disabled={loading || noCV}><Send size={14} /></button>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {suggestionChips.length > 0 && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                {suggestionChips.map(chip => (
+                  <button key={chip} onClick={() => sendSuggestion(chip)} disabled={loading} style={{
+                    border:'1px solid rgba(14,165,233,.25)', background:'rgba(14,165,233,.08)',
+                    color:'#7dd3fc', borderRadius:999, padding:'6px 10px', fontSize:12,
+                    fontWeight:700, cursor:loading?'not-allowed':'pointer',
+                  }}>
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{ display:'flex', gap:8 }}>
+              <input
+                value={input} onChange={e=>setInput(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&send()}
+                placeholder={noCV ? 'Upload your CV first…' : 'Tell Jobby what you\'re looking for…'}
+                disabled={noCV}
+                style={{ flex:1 }}
+              />
+              <button onClick={send} className="btn-primary" disabled={loading || noCV}><Send size={14} /></button>
+            </div>
           </div>
         )}
       </div>

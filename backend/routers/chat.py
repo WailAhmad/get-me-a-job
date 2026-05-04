@@ -127,6 +127,42 @@ def _parse_recency(text: str) -> Optional[int]:
     return None
 
 
+def _recency_prompt(country: str | None = None, roles: List[str] | None = None) -> str:
+    scope = f" in **{country}**" if country else ""
+    role_note = f" for **{', '.join((roles or [])[:3])}**" if roles else ""
+    return (
+        f"I have the region{scope} and target roles{role_note}.\n\n"
+        "**How far back should I search LinkedIn postings?**\n"
+        "Choose one: **today**, **last week**, **last 14 days**, or **last 30 days**."
+    )
+
+
+def _roles_prompt(country: str | None = None, days: int | None = None) -> str:
+    nice = {1: "today", 7: "last week", 14: "last 14 days", 30: "last 30 days"}.get(days, f"last {days} days" if days else "")
+    bits = []
+    if country:
+        bits.append(f"region **{country}**")
+    if nice:
+        bits.append(f"recency **{nice}**")
+    context = " and ".join(bits)
+    prefix = f"I have {context}.\n\n" if context else ""
+    return prefix + "**Which job titles should I target?** You can say **match my CV** or list titles like **Head of Data, AI Director**."
+
+
+def _missing_preference_followup(prefs_update: dict, current_prefs: dict) -> tuple[str, str] | None:
+    merged = {**(current_prefs or {}), **(prefs_update or {})}
+    country = merged.get("country")
+    days = merged.get("recency_days")
+    roles = merged.get("roles") or []
+    if country and roles and not days:
+        return "recency", _recency_prompt(country, roles)
+    if country and days and not roles:
+        return "roles", _roles_prompt(country, days)
+    if roles and days and not country:
+        return "country", "I have the roles and timeframe. **Which region should I search?** Try **GCC**, **Europe**, **UAE**, **Saudi Arabia**, or **Remote**."
+    return None
+
+
 AI_DATA_ROLES = {
     "head of ai", "head of data", "ai director", "chief data officer",
     "ai product", "ai platform", "ai architect", "data governance",
@@ -348,6 +384,10 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
             prefs_update["ready"] = True
             next_step = "ready"
 
+        followup = _missing_preference_followup(prefs_update, prefs)
+        if followup and not prefs_update.get("ready"):
+            next_step, reply = followup
+
         if not reply:
             reply = "Got it. I updated your search preferences."
         return next_step, reply, prefs_update
@@ -374,17 +414,42 @@ def _step_response(step: str, msg: str, s: dict) -> Tuple[str, str, dict]:
     if ai_result:
         return ai_result
 
+    existing = s.get("preferences", {}) or {}
     country_update = _parse_country_payload(msg)
-    country = country_update["country"] if country_update else None
+    country = country_update["country"] if country_update else existing.get("country")
     days = _parse_recency(msg)
+    if not days:
+        days = existing.get("recency_days")
     roles = _parse_roles(msg, s.get("cv", {}))
+    if existing.get("roles") and not any(term in msg.lower() for term in (
+        "role", "title", "job", "billing", "data", "ai", "analyst", "manager",
+        "director", "head", "specialist", "engineer", "product"
+    )):
+        roles = existing.get("roles") or roles
+    existing_country_update = None
+    if country and not country_update:
+        existing_country_update = {
+            "country": country,
+            "countries": existing.get("countries") or _country_payload(country).get("countries", []),
+            "locations": existing.get("locations") or _country_payload(country).get("locations", []),
+        }
+    country_payload = country_update or existing_country_update
 
     if country and days and roles:
         return "ready", (
             f"Got it. I saved a ready-to-run search for **{country}**, jobs from the **last {days} day(s)**, "
             "focused on roles aligned to the uploaded CV.\n\n"
-            "Go to the Dashboard and click **Run Automation**."
-        ), {**country_update, "recency_days": days, "roles": roles, "ready": True}
+            "The **Run Automation** button is ready below."
+        ), {**(country_payload or _country_payload(country)), "recency_days": days, "roles": roles, "ready": True}
+
+    if country and roles and not days:
+        return "recency", _recency_prompt(country, roles), {**(country_payload or _country_payload(country)), "roles": roles, "ready": False}
+
+    if country and days and not roles:
+        return "roles", _roles_prompt(country, days), {**(country_payload or _country_payload(country)), "recency_days": days, "ready": False}
+
+    if roles and days and not country:
+        return "country", "I have the roles and timeframe. **Which region should I search?** Try **GCC**, **Europe**, **UAE**, **Saudi Arabia**, or **Remote**.", {"roles": roles, "recency_days": days, "ready": False}
 
     if step == "greet":
         if not s["cv"].get("filename"):
@@ -396,8 +461,7 @@ def _step_response(step: str, msg: str, s: dict) -> Tuple[str, str, dict]:
             return "country", ("I didn't catch a country in there — try one of: "
                               + ", ".join(COUNTRIES[:8]) + "…"), {}
         return "recency", (f"Great — searching in **{country}**.\n\n"
-                            f"**How recent should the jobs be?** (e.g. *posted today*, "
-                            f"*last week*, *last 14 days*, *last month*)"), country_update or _country_payload(country)
+                            f"**How recent should the jobs be?** Choose **today**, **last week**, **last 14 days**, or **last 30 days**."), country_update or _country_payload(country)
 
     if step == "recency":
         if not days:
