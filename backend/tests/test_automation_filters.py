@@ -56,6 +56,19 @@ class AutomationFilterTests(unittest.TestCase):
         )
         self.assertGreaterEqual(score, 80)
 
+    def test_high_intent_ai_data_titles_reach_apply_threshold(self):
+        titles = [
+            "AI Agent Engineer",
+            "AI Agents Operator",
+            "Jr. Data Scientist",
+            "Data Privacy Consultant",
+            "Business Intelligence Senior Specialist",
+        ]
+        for title in titles:
+            with self.subTest(title=title):
+                score = _score({"title": title, "company": "Example", "location": "Riyadh"}, self.cv, self.prefs)
+                self.assertGreaterEqual(score, 60)
+
     def test_name_answers_come_from_current_cv_or_profile(self):
         cv = {"name": "Hend Aboseda"}
         self.assertEqual(_profile_answer("first name", cv, {}), "Hend")

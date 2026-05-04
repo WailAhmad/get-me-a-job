@@ -103,7 +103,8 @@ def _increment_counters():
 # PRIMARY domain keywords — at least one MUST appear for a match
 _PRIMARY_DOMAIN = {
     "ai": 18, "artificial intelligence": 20, "machine learning": 18, "ml ": 12,
-    "data": 14, "data science": 18, "analytics": 12, "data engineer": 14,
+    "data": 14, "data science": 18, "data scientist": 18, "analytics": 12, "data engineer": 14,
+    "data privacy": 14, "business intelligence": 14,
     "digital transformation": 16, "cognitive": 14,
     "intelligence": 10, "emerging technolog": 12,
     "databricks": 14, "nlp": 12, "deep learning": 14,
@@ -133,6 +134,14 @@ _SENIORITY_KEYWORDS = {
     "architect": 10, "principal": 8, "manager": 4,
     "senior": 6, "sr.": 4, "sr ": 4,
 }
+
+_HIGH_INTENT_AI_DATA_TITLE = [
+    "ai agent", "ai engineer", "artificial intelligence specialist",
+    "machine learning engineer", "data scientist", "data engineer",
+    "data analytics", "data analyst", "data privacy", "business intelligence",
+    "analytics consultant", "enterprise architecture", "solution architect",
+    "data platform", "data platforms", "data monetization",
+]
 
 # Hard blacklist — these roles are NEVER relevant regardless of other keywords
 _BLACKLIST = [
@@ -331,6 +340,8 @@ def _score(job: dict, cv: dict, prefs: dict = None) -> int:
         if _kw_in(kw, text):
             seniority_score = max(seniority_score, weight)
 
+    high_intent = any(kw in title for kw in _HIGH_INTENT_AI_DATA_TITLE)
+
     # ── CV skill overlap bonus (max ~10 points) ──
     skills = [s.lower() for s in cv.get("skills", [])]
     skill_overlap = sum(1 for s in skills if _kw_in(s, text))
@@ -348,8 +359,10 @@ def _score(job: dict, cv: dict, prefs: dict = None) -> int:
     # AI/data keywords alone are not enough: IC/specialist roles without any
     # seniority signal should stay below the application threshold.
     if seniority_score == 0:
-        raw = 35 + min(primary_score, 18) + min(modifier_score, 4) + skill_score
-        return max(25, min(58, raw))
+        base = 42 if high_intent else 35
+        raw = base + min(primary_score, 18) + min(modifier_score, 4) + skill_score
+        cap = 64 if high_intent else 58
+        return max(25, min(cap, raw))
 
     # ── Combine: base 40 + primary + modifier bonus + seniority + skills ──
     raw = 40 + min(primary_score, 28) + min(modifier_score, 10) + seniority_score + skill_score
