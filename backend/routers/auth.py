@@ -44,6 +44,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 EMAIL_CODE_TTL_SECONDS = 10 * 60
+PASSWORD_MIN_LENGTH = 8
 
 
 def _smtp_configured() -> bool:
@@ -95,6 +96,43 @@ def _save_profile(profile: dict):
         s["profile"] = profile
 
     state.update(m)
+
+
+def _normalise_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _display_name_from_email(email: str) -> str:
+    return email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
+
+
+def _hash_password(password: str, salt_hex: str | None = None) -> tuple[str, str]:
+    salt = bytes.fromhex(salt_hex) if salt_hex else secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 260_000)
+    return salt.hex(), digest.hex()
+
+
+def _password_ok(password: str, salt_hex: str, digest_hex: str) -> bool:
+    _, candidate = _hash_password(password, salt_hex)
+    return hmac.compare_digest(candidate, digest_hex)
+
+
+def _save_local_login_profile(email: str, name: str | None = None):
+    _save_profile({
+        "name": name or _display_name_from_email(email),
+        "title": email,
+        "email": email,
+        "photo": None,
+        "imported_at": time.time(),
+        "connection_type": "password",
+        "auth_provider": "local_password",
+        "email_verified": False,
+    })
+
+
+def _validate_password(password: str):
+    if len(password or "") < PASSWORD_MIN_LENGTH:
+        raise HTTPException(400, f"Password must be at least {PASSWORD_MIN_LENGTH} characters.")
 
 
 def _hash_code(email: str, code: str) -> str:
@@ -231,7 +269,56 @@ def providers():
                 "SMTP2GO is selected by default. Add SMTP2GO_API_KEY plus a verified SMTP_FROM_EMAIL, or use SMTP username/password fallback."
             ),
         },
+        "password": {
+            "configured": True,
+            "storage": "local_state",
+            "detail": "Free local email/password accounts are stored in data/state.json using PBKDF2 password hashes. Email verification can be enabled later.",
+        },
     }
+
+
+@router.post("/password/register")
+def password_register(body: dict):
+    email = _normalise_email(body.get("email") or "")
+    password = str(body.get("password") or "")
+    name = (body.get("name") or "").strip() or None
+    if not EMAIL_RE.match(email):
+        raise HTTPException(400, "Enter a valid email address.")
+    _validate_password(password)
+    s = state.get()
+    users = s.get("users") or {}
+    if email in users:
+        raise HTTPException(409, "An account already exists for this email. Sign in instead.")
+    salt, digest = _hash_password(password)
+    now = time.time()
+
+    def m(st):
+        st.setdefault("users", {})[email] = {
+            "email": email,
+            "name": name or _display_name_from_email(email),
+            "password_salt": salt,
+            "password_hash": digest,
+            "created_at": now,
+            "updated_at": now,
+            "email_verified": False,
+        }
+
+    state.update(m)
+    _save_local_login_profile(email, name)
+    return {"success": True, "profile": state.get()["profile"]}
+
+
+@router.post("/password/login")
+def password_login(body: dict):
+    email = _normalise_email(body.get("email") or "")
+    password = str(body.get("password") or "")
+    if not EMAIL_RE.match(email):
+        raise HTTPException(400, "Enter a valid email address.")
+    user = (state.get().get("users") or {}).get(email)
+    if not user or not _password_ok(password, user.get("password_salt") or "", user.get("password_hash") or ""):
+        raise HTTPException(401, "Invalid email or password.")
+    _save_local_login_profile(email, user.get("name"))
+    return {"success": True, "profile": state.get()["profile"]}
 
 
 @router.post("/email/start")

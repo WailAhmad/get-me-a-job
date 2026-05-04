@@ -30,6 +30,8 @@ export const importProfile  = () => api.post('/profile/import').then(r => r.data
 export const getProfileStatus = () => api.get('/profile/status').then(r => r.data)
 export const logoutProfile  = () => api.post('/profile/logout').then(r => r.data)
 export const getAuthProviders = () => api.get('/auth/providers').then(r => r.data)
+export const registerPasswordAccount = (email, password, name='') => api.post('/auth/password/register', { email, password, name }).then(r => r.data)
+export const loginPasswordAccount = (email, password) => api.post('/auth/password/login', { email, password }).then(r => r.data)
 export const startEmailSignup = (email) => api.post('/auth/email/start', { email }).then(r => r.data)
 export const verifyEmailSignup = (email, code) => api.post('/auth/email/verify', { email, code }).then(r => r.data)
 

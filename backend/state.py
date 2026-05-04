@@ -28,9 +28,11 @@ DEFAULT: Dict[str, Any] = {
     "profile": {
         "name": None,
         "title": None,
+        "email": None,
         "photo": None,
         "imported_at": None,
     },
+    "users": {},             # email -> local password account metadata
     "cv": {
         "filename": None,
         "uploaded_at": None,

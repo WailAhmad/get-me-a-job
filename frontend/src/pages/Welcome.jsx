@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getAuthProviders, startEmailSignup, verifyEmailSignup } from '../api/client'
+import { getAuthProviders, loginPasswordAccount, registerPasswordAccount } from '../api/client'
 import Logo from '../components/Logo'
 
 const SLIDES = [
@@ -18,7 +18,9 @@ export default function Welcome({ onAuthenticated }) {
   const [imported, setImported] = useState(null)
   const [providers, setProviders] = useState(null)
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
+  const [authMode, setAuthMode] = useState('register')
   const slideRef = useRef(null)
 
   useEffect(() => {
@@ -45,38 +47,21 @@ export default function Welcome({ onAuthenticated }) {
     window.location.href = `/api/auth/${provider}/start`
   }
 
-  const emailDevMode = providers?.email?.dev_mode
-
-  const sendEmailCode = async () => {
+  const submitPasswordAuth = async () => {
     setPhase('opening')
-    setStatus('Sending verification code...')
+    setStatus(authMode === 'register' ? 'Creating your account...' : 'Signing you in...')
     try {
-      const res = await startEmailSignup(email)
-      setPhase('code')
-      setStatus(
-        res?.dev_mode
-          ? `Dev mode: check the Backend API console for your code (SMTP not configured).`
-          : `Verification code sent to ${email} — check your inbox.`
-      )
+      const result = authMode === 'register'
+        ? await registerPasswordAccount(email, password, name)
+        : await loginPasswordAccount(email, password)
+      setImported(result.profile)
+      setPhase('done')
+      setStatus(authMode === 'register' ? 'Account created.' : 'Signed in.')
+      setTimeout(() => onAuthenticated?.(), 650)
     } catch (e) {
       const data = e?.response?.data
       setPhase('error')
-      setStatus(data?.detail || e.message || 'Could not send verification code.')
-    }
-  }
-
-  const verifyEmailCode = async () => {
-    setPhase('opening')
-    setStatus('Verifying code...')
-    try {
-      const result = await verifyEmailSignup(email, code)
-      setImported(result.profile)
-      setPhase('done')
-      setStatus('Email verified.')
-      setTimeout(() => onAuthenticated?.(), 650)
-    } catch (e) {
-      setPhase('error')
-      setStatus(e?.response?.data?.detail || e.message || 'Verification failed.')
+      setStatus(data?.detail || e.message || 'Could not sign in.')
     }
   }
 
@@ -170,23 +155,43 @@ export default function Welcome({ onAuthenticated }) {
             {(phase==='idle'||phase==='error') && (
               <div>
                 <p style={{ fontSize:13, color:'#64748b', marginBottom:10, lineHeight:1.6 }}>
-                  {emailDevMode
-                    ? 'Dev mode: enter your email and check the Backend API console for your verification code (SMTP not configured).'
-                    : 'Step 1: sign up with your email. We send a real verification code to your inbox before signing you in. LinkedIn automation still requires a real LinkedIn session in Settings.'
-                  }
+                  Create a local JobsLand account with your email and password. Email verification can be enabled later; LinkedIn automation still requires a real LinkedIn session in Settings.
                 </p>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+                  <button onClick={() => setAuthMode('register')} style={{ borderRadius:12, border:`1px solid ${authMode==='register'?'rgba(14,165,233,.45)':'rgba(255,255,255,.1)'}`, background:authMode==='register'?'rgba(14,165,233,.16)':'rgba(255,255,255,.04)', color:authMode==='register'?'#e0f2fe':'#94a3b8', padding:'9px 10px', fontSize:13, fontWeight:800, cursor:'pointer' }}>Sign up</button>
+                  <button onClick={() => setAuthMode('login')} style={{ borderRadius:12, border:`1px solid ${authMode==='login'?'rgba(14,165,233,.45)':'rgba(255,255,255,.1)'}`, background:authMode==='login'?'rgba(14,165,233,.16)':'rgba(255,255,255,.04)', color:authMode==='login'?'#e0f2fe':'#94a3b8', padding:'9px 10px', fontSize:13, fontWeight:800, cursor:'pointer' }}>Log in</button>
+                </div>
                 <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:12 }}>
+                  {authMode === 'register' && (
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="Full name"
+                      autoComplete="name"
+                      style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:14, outline:'none' }}
+                    />
+                  )}
                   <input
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="Email address"
                     autoComplete="email"
-                    onKeyDown={e => { if (e.key === 'Enter' && email.trim()) sendEmailCode() }}
+                    onKeyDown={e => { if (e.key === 'Enter' && email.trim() && password.length >= 8) submitPasswordAuth() }}
                     style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:14, outline:'none' }}
                   />
-                  <button id="email-signup-btn" onClick={sendEmailCode} disabled={!email.trim()} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'linear-gradient(135deg,#2563eb,#0ea5e9)', color:'#ffffff', border:'none', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:800, cursor:email.trim()?'pointer':'not-allowed', opacity:email.trim()?1:.55 }}>
-                    Sign up with email
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Password (8+ characters)"
+                    autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
+                    onKeyDown={e => { if (e.key === 'Enter' && email.trim() && password.length >= 8) submitPasswordAuth() }}
+                    style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:14, outline:'none' }}
+                  />
+                  <button id="email-password-btn" onClick={submitPasswordAuth} disabled={!email.trim() || password.length < 8} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'linear-gradient(135deg,#2563eb,#0ea5e9)', color:'#ffffff', border:'none', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:800, cursor:email.trim()&&password.length>=8?'pointer':'not-allowed', opacity:email.trim()&&password.length>=8?1:.55 }}>
+                    {authMode === 'register' ? 'Create account' : 'Log in'}
                   </button>
                 </div>
                 <div style={{ height:1, background:'rgba(255,255,255,.08)', margin:'14px 0' }} />
@@ -214,27 +219,6 @@ export default function Welcome({ onAuthenticated }) {
                   {!providers?.apple?.configured && <span style={{ marginLeft:4, fontSize:11, color:'#fbbf24' }}>Setup required</span>}
                 </button>
                 {phase==='error' && <p style={{ marginTop:10, fontSize:12, color:'#f87171', background:'rgba(239,68,68,.08)', borderRadius:10, padding:'8px 12px' }}>{status}</p>}
-              </div>
-            )}
-
-            {phase==='code' && (
-              <div>
-                <p style={{ fontSize:13, color:'#94a3b8', marginBottom:12, lineHeight:1.6 }}>{status}</p>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={code}
-                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="6-digit code"
-                  autoComplete="one-time-code"
-                  style={{ width:'100%', boxSizing:'border-box', letterSpacing:3, textAlign:'center', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:18, fontWeight:800, outline:'none', marginBottom:10 }}
-                />
-                <button id="verify-email-btn" onClick={verifyEmailCode} disabled={code.length !== 6} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'linear-gradient(135deg,#059669,#14b8a6)', color:'#ffffff', border:'none', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:800, cursor:code.length===6?'pointer':'not-allowed', opacity:code.length===6?1:.55, marginBottom:10 }}>
-                  Verify and sign in
-                </button>
-                <button onClick={() => { setPhase('idle'); setCode(''); setStatus('') }} style={{ width:'100%', background:'transparent', color:'#64748b', border:'none', fontSize:12, cursor:'pointer' }}>
-                  Use another email
-                </button>
               </div>
             )}
 
