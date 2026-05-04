@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sendChat, getChat, resetChat, startAutomation } from '../api/client'
-import { Send, Bot, RefreshCw, Play, MapPin, Calendar, Briefcase, Globe, Filter, Sparkles, CheckCircle2 } from 'lucide-react'
+import { Send, Bot, RefreshCw, Play, MapPin, Calendar, Briefcase, Globe, Filter, Sparkles, CheckCircle2, Search } from 'lucide-react'
 
 function renderText(text) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
@@ -16,6 +16,7 @@ function FilterSidebar({ prefs }) {
   const country   = prefs?.country
   const countries = prefs?.countries || (country ? [country] : [])
   const days      = prefs?.recency_days
+  const keywords  = prefs?.search_keywords || []
   const roles     = prefs?.roles || []
   const ready     = prefs?.ready
 
@@ -26,6 +27,9 @@ function FilterSidebar({ prefs }) {
   if (days) {
     const nice = { 1:'Past 24 hours', 7:'Last 7 days', 14:'Last 14 days', 30:'Last 30 days' }[days] || `Last ${days} days`
     filters.push({ icon: Calendar,  label: 'Recency',   value: nice,     color: '#8b5cf6' })
+  }
+  if (keywords.length) {
+    filters.push({ icon: Search, label: 'LinkedIn Keywords', value: `${keywords.length} quer${keywords.length>1?'ies':'y'}`, color: '#14b8a6', items: keywords })
   }
   if (roles.length) {
     filters.push({ icon: Briefcase, label: 'Target Roles', value: `${roles.length} role${roles.length>1?'s':''}`, color: '#0ea5e9', items: roles })
@@ -99,6 +103,7 @@ function FilterSidebar({ prefs }) {
   locations: countries.length ? countries : null,
   recency_days: days || null,
   target_roles: roles.length ? roles : null,
+  search_keywords: keywords.length ? keywords : null,
   status: ready ? 'ready' : 'incomplete',
 }, null, 2)}
           </pre>

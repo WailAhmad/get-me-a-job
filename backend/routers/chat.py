@@ -168,14 +168,14 @@ def _region_label(countries: List[str]) -> str:
     has_gcc = any(c in GCC_COUNTRIES for c in countries)
     has_europe = any(c in EUROPE_COUNTRIES for c in countries)
     extra = [c for c in countries if c not in GCC_COUNTRIES + EUROPE_COUNTRIES]
-    if has_gcc and has_europe and not extra:
-        return "GCC + Europe"
-    if has_gcc and not has_europe and not extra:
-        return "GCC"
-    if has_europe and not has_gcc and not extra:
-        return "Europe"
     if len(countries) == 1:
         return countries[0]
+    if has_gcc and has_europe and not extra:
+        return "GCC + Europe"
+    if has_gcc and not has_europe and not extra and set(countries) == set(GCC_COUNTRIES):
+        return "GCC"
+    if has_europe and not has_gcc and not extra and set(countries) == set(EUROPE_COUNTRIES):
+        return "Europe"
     labels = []
     if has_gcc:
         labels.append("GCC")
@@ -204,6 +204,24 @@ def _message_mentions_roles(text: str) -> bool:
         "architect", "product", "governance", "transformation"
     )
     return any(term in t for term in role_terms)
+
+
+def _parse_search_keywords(text: str, cv: dict | None = None) -> List[str]:
+    t = (text or "").lower()
+    keywords: List[str] = []
+    if any(phrase in t for phrase in ("ai & data", "data & ai", "ai and data", "data and ai")):
+        keywords.append("AI & Data")
+    elif "genai" in t or "generative ai" in t:
+        keywords.append("Generative AI")
+    elif "machine learning" in t:
+        keywords.append("Machine Learning")
+    elif "data science" in t:
+        keywords.append("Data Science")
+    elif "billing analyst" in t:
+        keywords.append("Billing Analyst")
+    elif "billing" in t and cv and any(term in " ".join(cv.get("skills") or []).lower() for term in ("billing", "invoice", "invoicing")):
+        keywords.append("Billing")
+    return _dedupe(keywords)
 
 
 AI_DATA_ROLES = {
@@ -347,6 +365,7 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
                 '    "country": "GCC|Europe|GCC + Europe|UAE|Saudi Arabia|Qatar|Kuwait|Bahrain|Oman|Remote|..."|null,\n'
                 '    "countries": ["..."],\n'
                 '    "locations": ["..."],\n'
+                '    "search_keywords": ["..."],\n'
                 '    "recency_days": number|null,\n'
                 '    "roles": ["..."]\n'
                 "  }\n"
@@ -357,6 +376,7 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
                 "- If the user combines regions, for example Gulf and Europe, set country to GCC + Europe and include both region country lists.\n"
                 "- If they say last week, set recency_days to 7. Today/past 24 hours is 1. Last month is 30.\n"
                 "- If they say all jobs for me / based on my CV, choose concrete LinkedIn-searchable titles from the uploaded CV summary, title, and skills.\n"
+                "- If they ask for a broad keyword search like data and AI, AI & Data, GenAI, machine learning, or billing analyst, set search_keywords to the literal LinkedIn query phrase and use roles for target/scoring intent.\n"
                 "- Do not add AI, Data Science, Machine Learning, Scala, or Data Governance roles unless the current CV or user explicitly asks for them.\n"
                 "- For billing/invoicing/accounts receivable CVs, good titles include Billing Analyst, Senior Billing Analyst, Billing Specialist, Accounts Receivable Analyst, Invoicing Specialist, Revenue Cycle Analyst, Collections Analyst, and Finance Operations Analyst.\n"
                 "- Set ready true only when country/location, recency, and roles are known.\n"
@@ -416,11 +436,15 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
             if country and not prefs_update.get("countries"):
                 prefs_update.update(_country_payload(country))
 
+        parsed_search_keywords = _parse_search_keywords(user_msg, cv)
+        if parsed_search_keywords:
+            prefs_update["search_keywords"] = parsed_search_keywords
+
         if not prefs_update.get("roles") and _message_mentions_roles(user_msg):
             parsed_roles = _parse_roles(user_msg, cv)
             if parsed_roles:
                 prefs_update["roles"] = parsed_roles
-        else:
+        elif prefs_update.get("roles"):
             prefs_update["roles"] = _sanitize_roles(prefs_update.get("roles") or [], cv, user_msg)
 
         merged_for_ready = {**prefs, **prefs_update}
@@ -439,7 +463,8 @@ def _call_ai_preference_agent(user_msg: str, s: dict) -> Optional[Tuple[str, str
                 reply = (
                     f"Updated. I’ll search **{merged_for_ready.get('country')}** for "
                     f"**{', '.join((merged_for_ready.get('roles') or [])[:4])}** from **{nice}**.\n\n"
-                    "You can keep editing filters here, or run the automation when ready."
+                    + (f"LinkedIn keyword query: **{', '.join(merged_for_ready.get('search_keywords') or [])}**.\n\n" if merged_for_ready.get("search_keywords") else "")
+                    + "You can keep editing filters here, or run the automation when ready."
                 )
 
         followup = _missing_preference_followup(prefs_update, prefs)
@@ -484,6 +509,7 @@ def _step_response(step: str, msg: str, s: dict) -> Tuple[str, str, dict]:
     days = _parse_recency(msg)
     if not days:
         days = existing.get("recency_days")
+    search_keywords = _parse_search_keywords(msg, s.get("cv", {})) or existing.get("search_keywords") or []
     roles = _parse_roles(msg, s.get("cv", {})) if _message_mentions_roles(msg) else (existing.get("roles") or [])
     if existing.get("roles") and not _message_mentions_roles(msg):
         roles = existing.get("roles") or roles
@@ -501,16 +527,16 @@ def _step_response(step: str, msg: str, s: dict) -> Tuple[str, str, dict]:
             f"Got it. I saved a ready-to-run search for **{country}**, jobs from the **last {days} day(s)**, "
             "focused on roles aligned to the uploaded CV.\n\n"
             "The **Run Automation** button is ready below."
-        ), {**(country_payload or _country_payload(country)), "recency_days": days, "roles": roles, "ready": True}
+        ), {**(country_payload or _country_payload(country)), "recency_days": days, "roles": roles, "search_keywords": search_keywords, "ready": True}
 
     if country and roles and not days:
-        return "recency", _recency_prompt(country, roles), {**(country_payload or _country_payload(country)), "roles": roles, "ready": False}
+        return "recency", _recency_prompt(country, roles), {**(country_payload or _country_payload(country)), "roles": roles, "search_keywords": search_keywords, "ready": False}
 
     if country and days and not roles:
-        return "roles", _roles_prompt(country, days), {**(country_payload or _country_payload(country)), "recency_days": days, "ready": False}
+        return "roles", _roles_prompt(country, days), {**(country_payload or _country_payload(country)), "search_keywords": search_keywords, "recency_days": days, "ready": False}
 
     if roles and days and not country:
-        return "country", "I have the roles and timeframe. **Which region should I search?** Try **GCC**, **Europe**, **UAE**, **Saudi Arabia**, or **Remote**.", {"roles": roles, "recency_days": days, "ready": False}
+        return "country", "I have the roles and timeframe. **Which region should I search?** Try **GCC**, **Europe**, **UAE**, **Saudi Arabia**, or **Remote**.", {"roles": roles, "search_keywords": search_keywords, "recency_days": days, "ready": False}
 
     if step == "greet":
         if not s["cv"].get("filename"):
@@ -588,7 +614,7 @@ def chat(body: ChatIn):
             st["chat"] = {"step": "greet", "history": []}
             st["preferences"] = {"ready": False, "country": None, "city": None,
                                   "countries": [], "locations": [], "roles": [],
-                                  "recency_days": None, "industries": []}
+                                  "search_keywords": [], "recency_days": None, "industries": []}
         state.update(m)
         s = state.get()
 

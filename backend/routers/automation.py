@@ -414,6 +414,30 @@ def _live_search_keywords(user_roles: List[str]) -> List[str]:
     return keywords[:10]
 
 
+def _automation_search_keywords(prefs: dict) -> List[str]:
+    """Prefer literal Jobby search phrases, then fall back to role-derived terms."""
+    explicit = [k.strip() for k in (prefs.get("search_keywords") or []) if k and k.strip()]
+    if explicit:
+        seen = set()
+        out = []
+        for term in explicit:
+            expanded = [term]
+            if term.lower() in {"ai & data", "data & ai"}:
+                # LinkedIn's UI treats broad "AI & Data" intent more like a
+                # broad boolean search. The URL keyword parameter with a
+                # literal ampersand is much narrower, so split it into the two
+                # productive LinkedIn-indexed searches and dedupe afterwards.
+                expanded = ["AI", "Data", term]
+            for candidate in expanded:
+                key = candidate.lower()
+                if key not in seen:
+                    seen.add(key)
+                    out.append(candidate)
+        return out[:5]
+    user_roles = prefs.get("roles") or ["AI Product Manager"]
+    return _live_search_keywords(user_roles)
+
+
 # ── Job discovery (replace with real LinkedIn scrape later) ───────────
 def _connected_sources() -> List[dict]:
     sources = state.get().get("job_sources", {})
@@ -497,15 +521,17 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
     if prefs.get("country") == "GCC" and not prefs.get("countries"):
         countries = ["UAE", "Saudi Arabia", "Qatar", "Kuwait", "Bahrain", "Oman"]
     
-    # Build concise LinkedIn-style keywords. Stored preferences can contain broad
-    # semantic role families, but LinkedIn search performs better with concrete titles.
-    user_roles = prefs.get("roles") or ["AI Product Manager"]
-    keywords = _live_search_keywords(user_roles)
+    # Use literal Jobby search phrases when present, otherwise convert role
+    # families into concise LinkedIn-indexed searches.
+    keywords = _automation_search_keywords(prefs)
     
     days = max(1, int(prefs.get("recency_days") or 7))
+    combo_count = max(1, len(keywords) * len(countries))
+    max_per_combo = max(25, min(100, 300 // combo_count))
 
     # Track per-(keyword, country) start counts so we can detect 0-result combos
     _combo_start: dict = {}   # (kw, country) -> found_so_far when search started
+    _kw_added: dict = {}       # kw -> total newly discovered from this keyword
 
     def _on_search_progress(event, kw, country, idx, total, found_so_far):
         label = f'"{kw}"' if kw else '"All Jobs"'
@@ -515,6 +541,7 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
         elif event == "batch_done":
             start = _combo_start.get((kw, country), found_so_far)
             added = found_so_far - start
+            _kw_added[kw] = _kw_added.get(kw, 0) + max(0, added)
             if added == 0:
                 _push("warn", f"   ⚠️ {label} in {country} → 0 results. Keyword may be too specific for this market.")
             else:
@@ -526,37 +553,14 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
         keywords_list=keywords,
         countries=countries,
         recency_days=days,
-        max_per_combo=25,
+        max_per_combo=max_per_combo,
         hard_cap=300,
         headless=True,
         on_progress=_on_search_progress,
     )
 
-    # Surface consistently-zero keywords so the user can fix them
-    zero_kws = [
-        kw for kw in keywords
-        if all(
-            _combo_start.get((kw, c), 0) == _combo_start.get((kw, c), 1)  # start==end → nothing added
-            or (found_so_far := sum(
-                    1 for (k2, c2), v in _combo_start.items() if k2 == kw
-                )) == 0
-            for c in countries
-        )
-    ]
-    # Simpler approach: keyword returned 0 if its batch_done events all showed 0 added
-    _kw_total: dict = {}
-    for (kw, country), start_count in _combo_start.items():
-        # We can't recover end counts from the dict alone — just flag if never appeared
-        pass
-    # Use a cleaner method: count per keyword across seen raw results
-    _kw_hit: set = set()
-    for j in raw:
-        # LinkedIn doesn't tell us which keyword found this job, so we use title matching
-        title = (j.get("title") or "").lower()
-        for kw in keywords:
-            if any(w.lower() in title for w in kw.split() if len(w) > 3):
-                _kw_hit.add(kw)
-    zero_kws = [kw for kw in keywords if kw not in _kw_hit and len(raw) > 0]
+    # Surface consistently-zero keywords so the user can fix them.
+    zero_kws = [kw for kw in keywords if _kw_added.get(kw, 0) == 0 and len(raw) > 0]
     if zero_kws:
         _push("warn", f"💡 Keywords with no matching results: {', '.join(zero_kws[:5])}. Consider updating them in your preferences.")
 

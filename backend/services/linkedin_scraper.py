@@ -182,28 +182,36 @@ def _build_search_url(keywords: str, country: str, days: int, start: int = 0) ->
 
 def _scroll_results_panel(driver, By):
     """Scroll the left-side jobs list to lazy-load more cards."""
-    candidates = [
-        ".jobs-search-results-list",
-        "div.scaffold-layout__list",
-        "ul.scaffold-layout__list-container",
-        ".jobs-search-results__list",
-    ]
-    panel = None
-    for sel in candidates:
+    script = """
+        const selectors = [
+          '.jobs-search-results-list',
+          'div.scaffold-layout__list',
+          'ul.scaffold-layout__list-container',
+          '.jobs-search-results__list',
+          '.scaffold-layout__list-container'
+        ];
+        const explicit = selectors.map(s => document.querySelector(s)).filter(Boolean);
+        const scrollables = Array.from(document.querySelectorAll('div, ul, main'))
+          .filter(el => el.scrollHeight > el.clientHeight + 80);
+        const targets = Array.from(new Set([...explicit, ...scrollables, document.scrollingElement].filter(Boolean)));
+        targets.forEach(el => { try { el.scrollTop = el.scrollHeight; } catch(e) {} });
+        window.scrollTo(0, document.body.scrollHeight);
+        return document.querySelectorAll('li[data-occludable-job-id], [data-job-id], li.scaffold-layout__list-item, li.jobs-search-results__list-item, div.job-search-card').length;
+    """
+    stable = 0
+    last_count = -1
+    for _ in range(28):
         try:
-            panel = driver.find_element(By.CSS_SELECTOR, sel)
-            if panel:
-                break
+            count = int(driver.execute_script(script) or 0)
         except Exception:
-            pass
-    for _ in range(10):
-        try:
-            if panel:
-                driver.execute_script("arguments[0].scrollTop += 700", panel)
-            else:
-                driver.execute_script("window.scrollBy(0, 700)")
-        except Exception:
-            pass
+            count = 0
+        if count <= last_count:
+            stable += 1
+        else:
+            stable = 0
+            last_count = count
+        if stable >= 4 and count >= 20:
+            break
         time.sleep(0.35)
 
 
@@ -348,6 +356,7 @@ def _extract_card(card, By) -> Optional[dict]:
             blob = (card.text or "").lower()
             if re.search(r"\bapplied\b", blob) and "easy apply" not in blob.split("applied")[0][-20:]:
                 already_applied = True
+                easy = True
         except Exception:
             pass
 
