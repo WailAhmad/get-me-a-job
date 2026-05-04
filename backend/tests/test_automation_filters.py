@@ -69,6 +69,15 @@ class AutomationFilterTests(unittest.TestCase):
                 score = _score({"title": title, "company": "Example", "location": "Riyadh"}, self.cv, self.prefs)
                 self.assertGreaterEqual(score, 60)
 
+    def test_job_description_can_lift_misleading_title(self):
+        job = {
+            "title": "Strategy Consultant",
+            "company": "Example",
+            "location": "Riyadh",
+            "description": "Lead enterprise AI and data analytics transformation programs, machine learning adoption, and data governance operating model design.",
+        }
+        self.assertGreaterEqual(_score(job, self.cv, self.prefs), 60)
+
     def test_name_answers_come_from_current_cv_or_profile(self):
         cv = {"name": "Hend Aboseda"}
         self.assertEqual(_profile_answer("first name", cv, {}), "Hend")

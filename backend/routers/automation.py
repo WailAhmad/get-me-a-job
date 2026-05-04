@@ -295,7 +295,12 @@ def _score(job: dict, cv: dict, prefs: dict = None) -> int:
     if not title or title == "unknown role":
         return 25
 
-    text = title + " " + (job.get("company") or "").lower()
+    description = (job.get("description") or job.get("description_text") or "").lower()
+    text = " ".join([
+        title,
+        (job.get("company") or "").lower(),
+        description[:6000],
+    ])
 
     # ── Hard blacklist check ──
     for bl in _BLACKLIST:
@@ -341,6 +346,7 @@ def _score(job: dict, cv: dict, prefs: dict = None) -> int:
             seniority_score = max(seniority_score, weight)
 
     high_intent = any(kw in title for kw in _HIGH_INTENT_AI_DATA_TITLE)
+    jd_high_intent = any(kw in description for kw in _HIGH_INTENT_AI_DATA_TITLE)
 
     # ── CV skill overlap bonus (max ~10 points) ──
     skills = [s.lower() for s in cv.get("skills", [])]
@@ -359,9 +365,9 @@ def _score(job: dict, cv: dict, prefs: dict = None) -> int:
     # AI/data keywords alone are not enough: IC/specialist roles without any
     # seniority signal should stay below the application threshold.
     if seniority_score == 0:
-        base = 42 if high_intent else 35
+        base = 42 if high_intent or jd_high_intent else 35
         raw = base + min(primary_score, 18) + min(modifier_score, 4) + skill_score
-        cap = 64 if high_intent else 58
+        cap = 64 if high_intent or jd_high_intent else 58
         return max(25, min(cap, raw))
 
     # ── Combine: base 40 + primary + modifier bonus + seniority + skills ──
@@ -449,6 +455,24 @@ def _automation_search_keywords(prefs: dict) -> List[str]:
         return out[:5]
     user_roles = prefs.get("roles") or ["AI Product Manager"]
     return _live_search_keywords(user_roles)
+
+
+def _should_enrich_description(job: dict) -> bool:
+    """Fetch JD for jobs where title-only scoring may be misleading."""
+    title = (job.get("title") or "").lower()
+    score = int(job.get("score") or 0)
+    if job.get("description"):
+        return False
+    if job.get("easy_apply"):
+        return True
+    if score >= 45:
+        return True
+    # Broad titles are often clarified only in the JD.
+    broad_terms = (
+        "manager", "lead", "architect", "consultant", "specialist",
+        "engineer", "analyst", "product", "strategy", "enterprise",
+    )
+    return any(term in title for term in broad_terms)
 
 
 # ── Job discovery (replace with real LinkedIn scrape later) ───────────
@@ -630,6 +654,38 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
 
     for j in raw:
         _score_and_stage(j)
+
+    # Title-only scoring is fast but can be wrong. Enrich plausible jobs with
+    # the LinkedIn job description, then rescore before deciding apply/external.
+    to_enrich = [j for j in out if _should_enrich_description(j)][:60]
+    if to_enrich:
+        _push("info", f"📖 Reading job descriptions for {len(to_enrich)} promising/borderline jobs…")
+        desc_driver = None
+        enriched = 0
+        try:
+            desc_driver = ls._make_driver(headless=True)
+            for idx, job in enumerate(to_enrich, start=1):
+                try:
+                    desc = ls.fetch_job_description(desc_driver, job.get("url") or "")
+                except PermissionError:
+                    raise
+                except Exception as exc:
+                    logger.debug("JD enrichment failed for %s: %s", job.get("id"), exc)
+                    desc = ""
+                if desc:
+                    old_score = job.get("score", 0)
+                    job["description"] = desc
+                    job["description_enriched"] = True
+                    job["score"] = _score(job, cv, prefs)
+                    enriched += 1
+                    if old_score < 60 <= job["score"]:
+                        _push("info", f"   ↗ JD raised '{job['title']}' at {job['company']} from {old_score}% to {job['score']}%.")
+                if idx % 15 == 0:
+                    _push_incremental()
+        finally:
+            if desc_driver:
+                ls._cleanup_driver(desc_driver)
+        _push("info", f"📖 JD enrichment complete — {enriched}/{len(to_enrich)} descriptions read.")
 
     _push_incremental()
     return out

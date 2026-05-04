@@ -165,6 +165,62 @@ def _cleanup_driver(driver) -> None:
             pass
 
 
+def fetch_job_description(driver, url: str, timeout: int = 8) -> str:
+    """Open a LinkedIn job page and extract the visible job description text."""
+    if not url:
+        return ""
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException
+
+    try:
+        driver.get(url)
+    except Exception as exc:
+        logger.debug("description driver.get failed for %s: %s", url, exc)
+        return ""
+
+    cur = driver.current_url or ""
+    if "/login" in cur or "/checkpoint" in cur or "/uas/login" in cur:
+        raise PermissionError("LinkedIn session is not valid (redirected to login)")
+
+    selectors = [
+        ".jobs-description__content",
+        ".jobs-box__html-content",
+        "#job-details",
+        "[data-job-details]",
+        ".jobs-description-content__text",
+        ".jobs-description",
+    ]
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ", ".join(selectors)))
+        )
+    except TimeoutException:
+        pass
+
+    chunks: List[str] = []
+    for sel in selectors:
+        try:
+            for el in driver.find_elements(By.CSS_SELECTOR, sel):
+                txt = (el.text or "").strip()
+                if txt and len(txt) > 80:
+                    chunks.append(txt)
+        except Exception:
+            pass
+    if not chunks:
+        try:
+            page = (driver.find_element(By.TAG_NAME, "body").text or "").strip()
+            if page:
+                chunks.append(page)
+        except Exception:
+            pass
+
+    text = "\n\n".join(dict.fromkeys(chunks))
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text[:12000]
+
+
 def _build_search_url(keywords: str, country: str, days: int, start: int = 0) -> str:
     params = {
         "keywords": keywords or "",
