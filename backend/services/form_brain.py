@@ -240,11 +240,75 @@ def profile_lookup(label: str, cv: dict, profile: dict) -> Optional[str]:
     if "disability" in ll or "disabled" in ll:
         return "I don't wish to answer"
 
-    # Availability
+    # Availability / start date
     if "available immediately" in ll or "start immediately" in ll:
         return "No"
-    if "available to start" in ll:
+    if "available to start" in ll or "start date" in ll or "earliest start" in ll:
         return "30 days"
+    if "when can you" in ll and "start" in ll:
+        return "30 days"
+
+    # ── Generic "how many years" patterns ──────────────────────────────
+    if "how many year" in ll and cv.get("years"):
+        return str(cv["years"])
+    if ("year" in ll or "years" in ll) and ("progressive" in ll or "total" in ll) and cv.get("years"):
+        return str(cv["years"])
+    if "how many" in ll and ("initiative" in ll or "project" in ll or "process" in ll):
+        return str(max(10, cv.get("years", 15)))
+
+    # ── "Have you" leadership questions — auto-yes for senior profiles ──
+    if ("have you" in ll or "do you have" in ll) and any(kw in ll for kw in (
+        "led", "manage", "built", "design", "implement", "architect",
+        "direct", "establish", "launch", "develop", "deliver", "drive",
+        "transform", "enterprise", "national", "scale", "program",
+        "data", "ai", "machine learning", "analytics", "cloud",
+        "leadership", "strategy", "governance", "digital",
+    )):
+        return "Yes"
+    if ("do you have" in ll or "have you" in ll) and "experience" in ll:
+        return "Yes"  # safe default for senior profile
+
+    # ── Resume / CV selection ──────────────────────────────────────────
+    if any(kw in ll for kw in ("resume", "cv ", "curriculum", "upload")):
+        # Can't resolve from profile — the filler handles this
+        return None
+
+    # ── Generic salary without expected/current prefix ─────────────────
+    if "salary" in ll or "compensation" in ll or "ctc" in ll or "package" in ll:
+        if "current" in ll or "present" in ll:
+            return _sal_current or None
+        return _sal_expected or None
+
+    # ── Onsite / hybrid / remote preference ────────────────────────────
+    if any(kw in ll for kw in ("onsite", "on-site", "hybrid", "remote")):
+        return "Yes"
+    if "work arrangement" in ll or "work model" in ll:
+        return "Yes"
+
+    # ── How did you hear / source ──────────────────────────────────────
+    if "hear" in ll or "how did you find" in ll or ("source" in ll and "job" in ll):
+        return "LinkedIn"
+    if "referral" in ll or "referred" in ll:
+        return "No"
+
+    # ── English / Arabic language proficiency ──────────────────────────
+    if "english" in ll:
+        return "Native or bilingual"
+    if "arabic" in ll:
+        return "Yes"
+    if "language" in ll and ("proficien" in ll or "level" in ll or "fluenc" in ll):
+        return "English - Native or bilingual"
+
+    # ── Cover letter ───────────────────────────────────────────────────
+    if "cover letter" in ll or "cover_letter" in ll:
+        summary = (cv.get("summary") or "").strip()
+        skills = ", ".join((cv.get("skills") or [])[:4])
+        years = cv.get("years") or ""
+        if summary:
+            return f"{summary[:180]} I am confident my background aligns well with this role."
+        if skills:
+            return f"I bring {years} years of relevant experience with strengths in {skills}. I am confident my background aligns well with this role."
+        return None
 
     return None
 

@@ -115,19 +115,40 @@ def _next_or_submit_button(driver, By):
     modal = _modal(driver, By)
     if not modal:
         return None
+
+    # LinkedIn SDUI sometimes puts navigation buttons in a footer or action-bar
+    # OUTSIDE the visible form content but still inside the modal DOM.
+    search_areas = [modal]
+    for footer_sel in [
+        ".artdeco-modal__actionbar",
+        "footer",
+        ".jobs-easy-apply-footer",
+        ".jobs-easy-apply-modal__footer",
+    ]:
+        try:
+            footer = modal.find_element(By.CSS_SELECTOR, footer_sel)
+            if _is_visible(footer):
+                search_areas.insert(0, footer)
+        except Exception:
+            pass
+
     submit, review, nxt = None, None, None
-    for b in modal.find_elements(By.CSS_SELECTOR, "button"):
-        if not _is_visible(b):
-            continue
-        blob = ((b.text or "") + " " + (b.get_attribute("aria-label") or "")).strip().lower()
-        if not blob:
-            continue
-        if "submit application" in blob or blob == "submit":
-            submit = b
-        elif "review" in blob:
-            review = b
-        elif "next" in blob or "continue" in blob:
-            nxt = b
+    for area in search_areas:
+        for b in area.find_elements(By.CSS_SELECTOR, "button"):
+            if not _is_visible(b):
+                continue
+            blob = ((b.text or "") + " " + (b.get_attribute("aria-label") or "")).strip().lower()
+            if not blob:
+                continue
+            if "submit application" in blob or blob == "submit":
+                submit = b
+            elif "review" in blob:
+                review = b
+            elif any(kw in blob for kw in (
+                "next", "continue", "save and continue", "weiter", "suivant",
+            )):
+                nxt = b
+
     if submit: return ("submit", submit)
     if review: return ("review", review)
     if nxt:    return ("next",   nxt)
@@ -1634,6 +1655,58 @@ def _field_satisfied(driver, By, field: dict) -> bool:
         return False
 
 
+def _smart_default(field: dict, cv: dict, profile: dict) -> Optional[str]:
+    """Last-resort reasonable default for a required field that nothing else could answer.
+
+    This prevents jobs from going to Pending Review for common fields where a
+    reasonable answer is better than not applying at all.
+    """
+    ftype = (field.get("type") or "").lower()
+    label = (field.get("label") or "").lower()
+    options = field.get("options") or []
+
+    _PLACEHOLDERS = {
+        "", "select", "select an option", "-- select --", "choose one",
+        "please select", "select one",
+    }
+
+    def _first_real_option() -> Optional[str]:
+        for o in options:
+            if (o or "").strip().lower() not in _PLACEHOLDERS:
+                return o.strip()
+        return None
+
+    # ── Resume / CV selection — pick the first (most recent) ──
+    if any(kw in label for kw in ("resume", "cv ", "curriculum", "upload")):
+        if options:
+            return _first_real_option()
+
+    # ── Number fields — reasonable positive defaults ──
+    if ftype == "number":
+        if "year" in label and ("experience" in label or "progressive" in label):
+            return str(cv.get("years") or 15)
+        if "salary" in label or "compensation" in label or "pay" in label or "ctc" in label:
+            # Read from preferences / cv / profile
+            for src in (cv, profile):
+                for key in ("salary_expectation", "current_salary"):
+                    val = str(src.get(key) or "").strip()
+                    if val:
+                        clean = re.sub(r"[^\d.]", "", val)
+                        if clean:
+                            return str(int(float(clean)))
+            return None  # Salary is too personal — let it go to pending
+        if "how many" in label:
+            return str(cv.get("years") or 10)
+        # Generic positive number (years, count, etc.) — safe default of 1
+        return "1"
+
+    # ── Select / radio / combobox — pick first non-placeholder option ──
+    if ftype in ("select", "radio", "combobox") and options:
+        return _first_real_option()
+
+    return None
+
+
 def _last_chance_repair(driver, By, snap: dict, failed_fields: List[dict],
                         profile: dict, cv: dict, api_key: str, api_base: str,
                         api_model: str, filler, brain, new_answers: List[dict]) -> bool:
@@ -1786,13 +1859,32 @@ def apply_easy(
             _close_modal(driver, By)
             return _pending_result(pending_question, new_answers, f"Form field we couldn't fill: {err_detail}")
 
+        # ── 0. Resume / CV selection auto-handler ─────────────────────────
+        # LinkedIn shows a page asking which uploaded resume to use. Auto-select
+        # the first (most recent) option so the form can advance.
+        prefilled_answers: dict = {}
+        _step_lower = (snap.get("step_title") or "").lower()
+        _page_lower = (snap.get("page_text") or "").lower()[:500]
+        _is_resume = any(kw in _step_lower or kw in _page_lower
+                         for kw in ("resume", "upload cv", "select a resume",
+                                    "upload your resume", "choose a resume"))
+        if _is_resume:
+            for f in snap["fields"]:
+                if f["type"] in ("radio", "select", "combobox") and f.get("options"):
+                    for o in f["options"]:
+                        if (o or "").strip():
+                            prefilled_answers[f["id"]] = o.strip()
+                            logger.info("[Resume] Auto-selected '%s' for '%s'", o[:40], f.get("label","")[:40])
+                            break
+
         # ── 1. Resolve every field ────────────────────────────────────────
         # Order: profile → bank → LLM (one call for all remaining)
         unresolved: List[dict] = []
-        prefilled_answers: dict = {}   # {field_id: value}
         pending_label: Optional[str] = None
 
         for f in snap["fields"]:
+            if f["id"] in prefilled_answers:
+                continue  # already handled by resume auto-selection
             # Skip fields that already have a value (carried over from previous step)
             if f.get("current") and f["type"] not in ("radio", "checkbox", "select", "combobox"):
                 continue
@@ -1820,7 +1912,10 @@ def apply_easy(
                 api_key, api_base, api_model,
             )
 
-        # ── 3. Decide final value per field, route to pending if uncertain
+        # ── 3. Decide final value per field ──────────────────────────────
+        # Strategy: apply first, ask later. For required fields we ALWAYS
+        # try to produce an answer (even a non-confident LLM answer or a
+        # smart default) rather than going straight to pending.
         final_answers: dict = {}
         for f in snap["fields"]:
             fid = f["id"]
@@ -1838,7 +1933,18 @@ def apply_easy(
                     new_answers.append({"question": f["label"], "answer": llm["value"]})
                 continue
             if llm and llm.get("value") and not llm.get("confident"):
-                # LLM responded but isn't confident — pending
+                # LLM answered but isn't confident. For REQUIRED fields we use
+                # the answer anyway — applying with a reasonable guess beats not
+                # applying at all. Only truly private data (passport, SSN) should
+                # reach pending, and the LLM would return empty for those.
+                if f.get("required") or f["type"] in ("select", "radio", "combobox", "number"):
+                    final_answers[fid] = llm["value"]
+                    logger.info("[AI] Using non-confident answer for required %r: %r",
+                               f.get("label", ""), llm["value"][:40])
+                    if f.get("label"):
+                        new_answers.append({"question": f["label"], "answer": llm["value"]})
+                    continue
+                # Truly sensitive — pending
                 pending_label = f["label"] or "Unknown question"
                 logger.info("[AI] Uncertain on %r — routing to pending", pending_label)
                 break
@@ -1848,7 +1954,15 @@ def apply_easy(
             if not f.get("required") and f["type"] in ("text", "textarea", "email", "url"):
                 # Optional free-text — leave empty
                 continue
-            # Required field with no answer → pending
+            # ── 3b. Smart default before giving up ────────────────────────
+            default = _smart_default(f, cv, profile)
+            if default:
+                final_answers[fid] = default
+                logger.info("[Default] Smart default for %r: %r", f.get("label", ""), default[:40])
+                if f.get("label"):
+                    new_answers.append({"question": f["label"], "answer": default})
+                continue
+            # Required field with truly no answer → pending
             pending_label = f["label"] or "Unknown question"
             logger.info("[AI] No answer for required %r — pending", pending_label)
             break
@@ -1885,15 +1999,31 @@ def apply_easy(
                     else:
                         failed_required = still_failed
             if failed_required:
-                labels = "; ".join(_field_pending_label(f) for f in failed_required)
-                _close_modal(driver, By)
-                return _pending_result(
-                    f"Required Easy Apply field did not accept an answer: {labels}",
-                    new_answers,
-                )
+                # Last resort: try smart defaults for each failed field
+                still_stuck = []
+                for f in failed_required:
+                    default = _smart_default(f, cv, profile)
+                    if default:
+                        filler.fill_field(driver, By, f, default)
+                        if _field_satisfied(driver, By, f):
+                            logger.info("[Default repair] Fixed %r with '%s'", f.get("label",""), default[:30])
+                            continue
+                    still_stuck.append(f)
+                if still_stuck:
+                    labels = "; ".join(_field_pending_label(f) for f in still_stuck)
+                    _close_modal(driver, By)
+                    return _pending_result(
+                        f"Required Easy Apply field did not accept an answer: {labels}",
+                        new_answers,
+                    )
 
         # ── 5. Click Next / Review / Submit ──────────────────────────────
         nxt = _next_or_submit_button(driver, By)
+        if not nxt:
+            # Sometimes the button takes a moment to become visible after filling
+            # (e.g. resume selection enables the Next button asynchronously).
+            time.sleep(1.5)
+            nxt = _next_or_submit_button(driver, By)
         if not nxt:
             _close_modal(driver, By)
             return _pending_result(

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getDashboardStats, getAutomationStatus, stopAutomation, startAutomation, clearJobs, getJobs, getLiveMode } from '../api/client'
-import { CheckCircle, Clock, Globe2, Play, Square, Radio, FileText, MessageSquare, AlertTriangle, Layers3, Trash2, XCircle, Zap, History } from 'lucide-react'
+import { CheckCircle, Clock, Globe2, Play, Square, Radio, FileText, MessageSquare, AlertTriangle, Layers3, Trash2, XCircle, Zap } from 'lucide-react'
 import AutomationPanel from '../components/AutomationPanel'
 import HourlyChart from '../components/HourlyChart'
 
@@ -357,7 +357,6 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
         <AppliedCard byApp={stats?.today_applied} already={stats?.already_applied} onClick={() => navigate('/history')} />
         <Card title="External"    value={stats?.today_external} sub="no Easy Apply — open manually"         icon={Globe2}   color="#a78bfa" onClick={() => navigate('/jobs')} />
         <Card title="Failed"      value={stats?.today_failed  } sub="apply errors today — see Job Explorer" icon={XCircle}  color="#ef4444" onClick={() => navigate('/jobs')} />
-        <Card title="All Time"    value={stats?.total_all_time} sub={`${stats?.auto_applied ?? 0} applied · ${stats?.applied_this_week ?? 0} this week`} icon={History} color="#64748b" onClick={() => navigate('/history')} />
       </div>
 
       {/* ── Inline Automation Log Panel ── */}
