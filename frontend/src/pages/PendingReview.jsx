@@ -55,7 +55,7 @@ export default function PendingReview({ onAnswered }) {
               <div key={j.id} className="card">
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14, gap:10 }}>
                   <div style={{ minWidth:0, flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:600, color:'#f1f5f9' }}>{j.title}</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>{j.title}</div>
                     <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>{j.company} · {j.location} · {j.score}% match</div>
                   </div>
                   <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
@@ -74,7 +74,7 @@ export default function PendingReview({ onAnswered }) {
                   <div style={{ fontSize:11, fontWeight:600, color:'#fbbf24', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:6 }}>
                     {j.pending_kind === 'verify_source' ? 'Verification required' : 'Question'}
                   </div>
-                  <div style={{ fontSize:13, color:'#f1f5f9' }}>{j.pending_question}</div>
+                  <div style={{ fontSize:14, color:'var(--text)' }}>{j.pending_question}</div>
                 </div>
 
                 {j.pending_kind === 'verify_source' ? (

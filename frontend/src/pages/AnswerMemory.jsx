@@ -29,7 +29,7 @@ export default function AnswerMemory() {
               <div key={ans.id} className="card" style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
                 <div style={{ minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:600, color:'#94a3b8', marginBottom:4 }}>{ans.question}</div>
-                  <div style={{ fontSize:13, color:'#cbd5e1' }}>{ans.answer}</div>
+                  <div style={{ fontSize:14, color:'var(--text)' }}>{ans.answer}</div>
                 </div>
                 <button onClick={()=>remove(ans.id)} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', flexShrink:0 }}><Trash2 size={14} /></button>
               </div>

@@ -31,7 +31,7 @@ export default function ApplicationHistory() {
                     <span style={{ fontSize:11, fontWeight:700, color:badge.color }}>{a.score}</span>
                   </div>
                   <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:14, fontWeight:600, color:'#f1f5f9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.title}</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.title}</div>
                     <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>
                       {a.company} · {a.location}{a.applied_at ? ` · ${new Date(a.applied_at*1000).toLocaleDateString()}` : ''}
                     </div>

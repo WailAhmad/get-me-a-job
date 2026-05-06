@@ -169,7 +169,7 @@ export default function Welcome({ onAuthenticated }) {
                       onChange={e => setName(e.target.value)}
                       placeholder="Full name"
                       autoComplete="name"
-                      style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:14, outline:'none' }}
+                      style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid var(--input-border)', background:'var(--input-bg)', color:'var(--text)', padding:'12px 14px', fontSize:14, outline:'none' }}
                     />
                   )}
                   <input
@@ -179,7 +179,7 @@ export default function Welcome({ onAuthenticated }) {
                     placeholder="Email address"
                     autoComplete="email"
                     onKeyDown={e => { if (e.key === 'Enter' && email.trim() && password.length >= 8) submitPasswordAuth() }}
-                    style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:14, outline:'none' }}
+                    style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid var(--input-border)', background:'var(--input-bg)', color:'var(--text)', padding:'12px 14px', fontSize:14, outline:'none' }}
                   />
                   <input
                     type="password"
@@ -188,7 +188,7 @@ export default function Welcome({ onAuthenticated }) {
                     placeholder="Password (8+ characters)"
                     autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
                     onKeyDown={e => { if (e.key === 'Enter' && email.trim() && password.length >= 8) submitPasswordAuth() }}
-                    style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid rgba(255,255,255,.12)', background:'rgba(2,6,23,.68)', color:'#e2e8f0', padding:'12px 14px', fontSize:14, outline:'none' }}
+                    style={{ width:'100%', boxSizing:'border-box', borderRadius:12, border:'1px solid var(--input-border)', background:'var(--input-bg)', color:'var(--text)', padding:'12px 14px', fontSize:14, outline:'none' }}
                   />
                   <button id="email-password-btn" onClick={submitPasswordAuth} disabled={!email.trim() || password.length < 8} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'linear-gradient(135deg,#2563eb,#0ea5e9)', color:'#ffffff', border:'none', borderRadius:14, padding:'12px 20px', fontSize:14, fontWeight:800, cursor:email.trim()&&password.length>=8?'pointer':'not-allowed', opacity:email.trim()&&password.length>=8?1:.55 }}>
                     {authMode === 'register' ? 'Create account' : 'Log in'}
@@ -252,7 +252,7 @@ export default function Welcome({ onAuthenticated }) {
                 }
                 {imported?.name && (
                   <div style={{ textAlign:'center' }}>
-                    <div style={{ fontSize:14, fontWeight:600, color:'#f1f5f9' }}>Welcome, {imported.name.split(' ')[0]}</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>Welcome, {imported.name.split(' ')[0]}</div>
                     <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>{imported.title}</div>
                   </div>
                 )}

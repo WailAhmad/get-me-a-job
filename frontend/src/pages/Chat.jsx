@@ -6,7 +6,7 @@ import { Send, Bot, RefreshCw, Play, MapPin, Calendar, Briefcase, Globe, Filter,
 function renderText(text) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
   return parts.map((p, i) => {
-    if (p.startsWith('**') && p.endsWith('**')) return <strong key={i} style={{ color:'#f1f5f9' }}>{p.slice(2,-2)}</strong>
+    if (p.startsWith('**') && p.endsWith('**')) return <strong key={i} style={{ color:'var(--text)' }}>{p.slice(2,-2)}</strong>
     return <span key={i}>{p}</span>
   })
 }
@@ -71,7 +71,7 @@ function FilterSidebar({ prefs }) {
               </div>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em' }}>{f.label}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{f.value}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{f.value}</div>
               </div>
             </div>
             {f.items && (
@@ -287,7 +287,7 @@ export default function Chat({ cv, onPrefsUpdate }) {
               <div style={{
                 maxWidth:'78%', padding:'10px 14px', borderRadius:14, fontSize:13, lineHeight:1.6, whiteSpace:'pre-wrap',
                 background: m.role==='user' ? 'linear-gradient(135deg,#2563eb,#0ea5e9)' : 'rgba(255,255,255,0.05)',
-                color: m.role==='user' ? '#fff' : '#cbd5e1',
+                color: m.role==='user' ? '#fff' : 'var(--text)',
                 border: m.role==='user' ? 'none' : '1px solid rgba(255,255,255,0.07)',
               }}>
                 {renderText(m.content)}
@@ -324,7 +324,7 @@ export default function Chat({ cv, onPrefsUpdate }) {
               border:'1px solid rgba(99,102,241,0.25)',
             }}>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>Jobby is ready to go 🎉</div>
+                <div style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>Jobby is ready to go 🎉</div>
                 <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>
                   Your filters are set. You can still edit them in chat, or run automation now.
                 </div>

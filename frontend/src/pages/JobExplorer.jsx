@@ -258,7 +258,7 @@ export default function JobExplorer() {
                     <span style={{ fontSize:13, fontWeight:700, color:scoreColor(j.score) }}>{j.score ?? '—'}</span>
                   </div>
                   <div style={{ minWidth:0, flex:1 }}>
-                    <div style={{ fontSize:15, fontWeight:700, color:'#f1f5f9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{j.title}</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{j.title}</div>
                     <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>
                       {j.company} · {j.location} · {j.source || 'Source'} · {j.posted_days_ago ?? 0}d ago
                     </div>
@@ -281,7 +281,7 @@ export default function JobExplorer() {
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8 }}>
                   <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
                     <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>Apply type</div>
-                    <div style={{ fontSize:12, color:'#cbd5e1', marginTop:4 }}>
+                    <div style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>
                       {j.easy_apply ? 'Easy Apply' : 'External'}
                     </div>
                   </div>
@@ -289,7 +289,7 @@ export default function JobExplorer() {
                     <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>
                       {j._bucket === 'auto_applied' ? 'Submitted' : j._bucket === 'failed' ? 'Attempted' : 'Found'}
                     </div>
-                    <div style={{ fontSize:12, color:'#cbd5e1', marginTop:4 }}>
+                    <div style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>
                       {(j._bucket === 'auto_applied' ? j.applied_at : j.discovered_at)
                         ? new Date(((j._bucket === 'auto_applied' ? j.applied_at : j.discovered_at)) * 1000)
                             .toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })

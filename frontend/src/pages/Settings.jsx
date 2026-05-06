@@ -214,7 +214,7 @@ export default function Settings({ onDisconnect }) {
         <div className="card" style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
             <UserRound size={16} style={{ color:'#60a5fa' }} />
-            <span style={{ fontSize:14, fontWeight:600, color:'#f1f5f9' }}>Account Profile</span>
+            <span style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>Account Profile</span>
           </div>
 
           <div style={{ display:'flex', alignItems:'center', gap:12, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)', borderRadius:12, padding:'12px 14px' }}>
@@ -226,7 +226,7 @@ export default function Settings({ onDisconnect }) {
               </div>
             )}
             <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'#e2e8f0', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{profile?.name || 'Google account connected'}</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{profile?.name || 'Google account connected'}</div>
               <div style={{ fontSize:11, color:'#64748b', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{profile?.title || 'Sync LinkedIn to import title'}</div>
             </div>
             <button onClick={syncLinkedInProfile} className="btn-secondary" style={{ padding:'8px 12px' }}>
@@ -239,7 +239,7 @@ export default function Settings({ onDisconnect }) {
         <div className="card" style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
             <Briefcase size={16} style={{ color:'#a78bfa' }} />
-            <span style={{ fontSize:14, fontWeight:600, color:'#f1f5f9' }}>Job Application Preferences</span>
+            <span style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>Job Application Preferences</span>
           </div>
           <p style={{ fontSize:12, color:'#64748b', lineHeight:1.5, marginTop:-8 }}>
             These answers fill form fields automatically. Set them once — the AI will use them on every application instead of guessing.
@@ -350,7 +350,7 @@ export default function Settings({ onDisconnect }) {
         <div className="card" style={{ display:'flex', flexDirection:'column', gap:14, border:`1px solid ${liveMode.effective?'rgba(16,185,129,0.30)':'rgba(245,158,11,0.25)'}`, background:liveMode.effective?'linear-gradient(135deg,rgba(16,185,129,0.08),rgba(56,189,248,0.04))':'linear-gradient(135deg,rgba(245,158,11,0.06),rgba(56,189,248,0.03))' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
             <Zap size={16} style={{ color: liveMode.effective ? '#34d399' : '#fbbf24' }} />
-            <span style={{ fontSize:14, fontWeight:700, color:'#f1f5f9' }}>Live Mode</span>
+            <span style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>Live Mode</span>
             <span className={`badge ${liveMode.effective?'badge-green':'badge-amber'}`} style={{ marginLeft:'auto' }}>
               {liveMode.effective ? 'LIVE — real submissions' : 'REAL MODE OFF'}
             </span>
@@ -379,7 +379,7 @@ export default function Settings({ onDisconnect }) {
           </div>
 
           {diagResult && (
-            <pre style={{ fontSize:11, color:'#cbd5e1', background:'rgba(0,0,0,.35)', border:'1px solid rgba(255,255,255,.06)', borderRadius:10, padding:12, overflow:'auto', maxHeight:280 }}>
+            <pre style={{ fontSize:12, color:'var(--text)', background:'var(--bg-subtle)', border:'1px solid var(--border)', borderRadius:10, padding:12, overflow:'auto', maxHeight:280 }}>
 {JSON.stringify(diagResult, null, 2)}
             </pre>
           )}
@@ -388,12 +388,12 @@ export default function Settings({ onDisconnect }) {
         <div className="card" style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
             <Link2 size={16} style={{ color:'#0077b5' }} />
-            <span style={{ fontSize:14, fontWeight:600, color:'#f1f5f9' }}>LinkedIn Automation Session</span>
+            <span style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>LinkedIn Automation Session</span>
           </div>
 
           <div style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)', borderRadius:12, padding:'12px 14px' }}>
             <div style={{ height:8, width:8, borderRadius:'50%', background:session?.has_session?'#10b981':'#f59e0b', flexShrink:0 }} />
-            <span style={{ flex:1, fontSize:13, color:'#cbd5e1' }}>{session?.has_session ? 'Connected — LinkedIn session is active' : 'Not connected — use the connect button below'}</span>
+            <span style={{ flex:1, fontSize:14, color:'var(--text-secondary)' }}>{session?.has_session ? 'Connected — LinkedIn session is active' : 'Not connected — use the connect button below'}</span>
             {session?.has_session && <button onClick={verify} style={{ fontSize:11, color:'#64748b', background:'none', border:'none', cursor:'pointer' }}>Verify</button>}
           </div>
 
@@ -424,7 +424,7 @@ export default function Settings({ onDisconnect }) {
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
                 <Globe2 size={16} style={{ color:'#38bdf8' }} />
-                <span style={{ fontSize:14, fontWeight:700, color:'#f1f5f9' }}>Job Sources</span>
+                <span style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>Job Sources</span>
               </div>
               <p style={{ fontSize:12, color:'#64748b', lineHeight:1.5 }}>
                 Connect the boards the agent should search. LinkedIn is required for profile sync and LinkedIn Easy Apply. Other boards stay unavailable until their real site-specific flows are implemented.
@@ -450,7 +450,7 @@ export default function Settings({ onDisconnect }) {
                   </div>
                   <div style={{ minWidth:0, flex:1 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                      <span style={{ fontSize:13, fontWeight:700, color:'#e2e8f0' }}>{source.name}</span>
+                      <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{source.name}</span>
                       <span className={`badge ${source.connected ? 'badge-green' : 'badge-gray'}`}>{source.connected ? 'Connected' : 'Not connected'}</span>
                     </div>
                     <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{source.region}</div>

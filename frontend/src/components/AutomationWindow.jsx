@@ -116,7 +116,7 @@ export default function AutomationWindow({ onClose, alreadyRunning }) {
             <span style={{ width:10, height:10, borderRadius:'50%', background:'#475569', display:'inline-block', flexShrink:0 }} />
           )}
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:'#f1f5f9' }}>
+            <div style={{ fontSize:15, fontWeight:800, color:'var(--text)' }}>
               {running ? 'Automation Running…' : 'Automation Complete'}
             </div>
             <div style={{ fontSize:11, color:'#475569', marginTop:2 }}>
@@ -138,7 +138,7 @@ export default function AutomationWindow({ onClose, alreadyRunning }) {
           <button onClick={() => setExpanded(v => !v)} style={{ padding:'6px 10px', borderRadius:10, border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.04)', color:'#94a3b8', fontSize:12, cursor:'pointer' }}>
             {expanded ? 'Compact' : 'Expand'}
           </button>
-          <button onClick={onClose} aria-label="Close run window" style={{ padding:'6px 10px', borderRadius:10, border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.04)', color:'#cbd5e1', fontSize:14, cursor:'pointer' }}>Close</button>
+          <button onClick={onClose} aria-label="Close run window" style={{ padding:'6px 10px', borderRadius:10, border:'1px solid var(--border)', background:'var(--bg-subtle)', color:'var(--text)', fontSize:14, cursor:'pointer' }}>Close</button>
         </div>
 
         <div style={{ flex:1, minHeight:0, display:'grid', gridTemplateColumns:expanded ? '1fr 280px' : '1fr', overflow:'hidden' }}>
@@ -184,7 +184,7 @@ export default function AutomationWindow({ onClose, alreadyRunning }) {
               ) : runs.map(run => (
                 <button key={run.id} onClick={() => openRun(run)} style={{ width:'100%', textAlign:'left', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.07)', borderRadius:14, padding:12, marginBottom:10, cursor:'pointer' }}>
                   <div style={{ display:'flex', justifyContent:'space-between', gap:8, marginBottom:6 }}>
-                    <span style={{ fontSize:12, fontWeight:700, color:'#f1f5f9' }}>{new Date(run.started_at * 1000).toLocaleTimeString()}</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{new Date(run.started_at * 1000).toLocaleTimeString()}</span>
                     <span className="badge badge-blue" style={{ fontSize:10 }}>{run.status}</span>
                   </div>
                   <div style={{ fontSize:11, color:'#64748b', lineHeight:1.6 }}>

@@ -19,7 +19,7 @@ function InfoCard({ icon: Icon, label, value, color, children }) {
         </div>
         <div>
           <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{value}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{value}</div>
         </div>
       </div>
       {children}
@@ -69,7 +69,7 @@ export default function CVUpload({ onUploaded }) {
             onClick={()=>document.getElementById('cv-file').click()}
           >
             <UploadCloud size={40} style={{ color:'#3b82f6', marginBottom:12 }} />
-            <p style={{ fontSize:15, fontWeight:600, color:'#f1f5f9', marginBottom:6 }}>Drop your CV here</p>
+            <p style={{ fontSize:16, fontWeight:700, color:'var(--text)', marginBottom:6 }}>Drop your CV here</p>
             <p style={{ fontSize:13, color:'#64748b' }}>or click to browse · PDF, DOCX supported</p>
             <input id="cv-file" type="file" accept=".pdf,.docx,.doc" style={{ display:'none' }} onChange={e=>upload(e.target.files[0])} />
           </div>
@@ -95,7 +95,7 @@ export default function CVUpload({ onUploaded }) {
                   <FileText size={20} style={{ color:'#34d399' }} />
                 </div>
                 <div>
-                  <div style={{ fontSize:14, fontWeight:600, color:'#f1f5f9' }}>{cv.filename}</div>
+                  <div style={{ fontSize:15, fontWeight:700, color:'var(--text)' }}>{cv.filename}</div>
                   <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>
                     Parsed successfully · {cv.skills?.length||0} skills detected
                   </div>
@@ -122,7 +122,7 @@ export default function CVUpload({ onUploaded }) {
               </div>
               <div style={{ display:'grid', gap:8 }}>
                 {cv.ats_hints.map((hint, i) => (
-                  <div key={i} style={{ fontSize:12, color:'#cbd5e1', lineHeight:1.5, display:'flex', gap:8 }}>
+                  <div key={i} style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.5, display:'flex', gap:8 }}>
                     <span style={{ color:'#f59e0b' }}>•</span>
                     <span>{hint}</span>
                   </div>
@@ -217,7 +217,7 @@ export default function CVUpload({ onUploaded }) {
                   }}>
                     <Briefcase size={14} style={{ color: '#64748b', flexShrink: 0 }} />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{exp.title}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{exp.title}</div>
                       <div style={{ fontSize: 11, color: '#64748b' }}>{exp.company}</div>
                     </div>
                   </div>
@@ -245,7 +245,7 @@ export default function CVUpload({ onUploaded }) {
                 <Sparkles size={20} style={{ color:'#818cf8' }} />
               </div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:600, color:'#f1f5f9', marginBottom:2 }}>Next: tell Jobby what you're looking for</div>
+                <div style={{ fontSize:15, fontWeight:700, color:'var(--text)', marginBottom:2 }}>Next: tell Jobby what you're looking for</div>
                 <div style={{ fontSize:12, color:'#94a3b8' }}>Country, recency, and target roles — takes 30 seconds.</div>
               </div>
               <button onClick={() => navigate('/chat')} className="btn-primary" style={{ flexShrink:0, gap:6 }}>
