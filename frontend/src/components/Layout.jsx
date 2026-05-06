@@ -2,10 +2,10 @@ import Sidebar from './Sidebar'
 
 export default function Layout({ children, onLogout, profile, cv, prefs }) {
   return (
-    <div className="app-shell" style={{ display:'flex', height:'100vh', overflow:'hidden', background:'#06080f', position:'relative' }}>
+    <div className="app-shell" style={{ display:'flex', height:'100vh', overflow:'hidden', background:'var(--bg-shell)', position:'relative' }}>
       <div style={{
         pointerEvents:'none', position:'fixed', inset:0,
-        backgroundImage:'linear-gradient(rgba(147,197,253,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(147,197,253,0.03) 1px,transparent 1px)',
+        backgroundImage:'linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px)',
         backgroundSize:'48px 48px', opacity:.4,
       }} />
       <Sidebar onLogout={onLogout} profile={profile} cv={cv} prefs={prefs} />

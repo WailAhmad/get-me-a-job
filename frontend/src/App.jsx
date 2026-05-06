@@ -58,9 +58,9 @@ export default function App() {
 
   if (!bootDone) {
     return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', gap:12, background:'#06080f' }}>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', gap:12, background:'var(--bg)' }}>
         <Logo height={82} width={78} style={{ borderRadius:20, opacity:.9 }} />
-        <svg style={{ height:20, width:20, animation:'spin 1s linear infinite', color:'#3b82f6' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <svg style={{ height:20, width:20, animation:'spin 1s linear infinite', color:'var(--brand)' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
           <path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
         </svg>
