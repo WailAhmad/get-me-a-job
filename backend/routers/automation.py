@@ -611,6 +611,21 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
     out: List[dict] = []
     _last_push_count = [0]  # track for incremental UI updates
 
+    def _has_valid_identity(j: dict) -> bool:
+        title = (j.get("title") or "").strip().lower()
+        company = (j.get("company") or "").strip().lower()
+        return bool(title and company and title != "unknown role" and company != "unknown company")
+
+    def _merge_with_previous(previous: dict, current: dict) -> dict:
+        """Keep fresh scrape data, but never let weak placeholders erase good data."""
+        merged = {**previous, **current}
+        for key, placeholder in (("title", "Unknown role"), ("company", "Unknown company"), ("location", "Unknown")):
+            cur = (current.get(key) or "").strip()
+            prev = previous.get(key)
+            if (not cur or cur.lower() == placeholder.lower()) and prev:
+                merged[key] = prev
+        return merged
+
     def _score_and_stage(j):
         """Score one job and add to output."""
         previous = existing.get(j["id"])
@@ -619,7 +634,7 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
             # current run just because we saw the same job id earlier; refresh
             # the searchable fields and rescore against the current CV/prefs.
             preserved_status = previous.get("status")
-            j = {**previous, **j}
+            j = _merge_with_previous(previous, j)
             j["rediscovered"] = True
             if preserved_status in {"applied", "already_applied", "pending", "failed", "external"}:
                 j["status"] = preserved_status
@@ -629,13 +644,29 @@ def _live_discover_jobs(prefs: dict, cv: dict) -> List[dict]:
         j["apply_type"] = "Easy Apply" if j.get("easy_apply") else "External Apply"
         j["score"] = _score(j, cv, prefs)
         
-        # Mark already-applied jobs (LinkedIn shows "Applied" badge)
-        if j.get("already_applied") or j["id"] in applied_ids:
+        # Mark already-applied jobs only when the current/remembered record is
+        # trustworthy. Bad LinkedIn cards can produce "Unknown role/company";
+        # those must not be promoted into already-applied just because an ID
+        # exists in local memory.
+        remembered_applied = (
+            j["id"] in applied_ids
+            and _has_valid_identity(j)
+            and previous
+            and previous.get("status") in {"applied", "already_applied"}
+            and (previous.get("submission_verified") or previous.get("already_applied"))
+        )
+        linkedin_says_applied = bool(j.get("already_applied") and _has_valid_identity(j))
+        if linkedin_says_applied or remembered_applied:
             j["status"] = "already_applied"
             j["applied_at"] = j["discovered_at"]
             j["submission_verified"] = True
             if j["id"] not in applied_ids:
                 applied_ids.add(j["id"])
+        elif previous and previous.get("status") == "already_applied" and not linkedin_says_applied:
+            # If LinkedIn no longer says "Applied", keep the job discoverable
+            # for the new run instead of hiding it behind stale memory.
+            j["status"] = "discovered"
+            j["submission_verified"] = False
         else:
             j["status"] = "discovered"
         out.append(j)
@@ -949,7 +980,7 @@ def _engine_loop():
             st["jobs"]["items"][j["id"]] = j
         # Add already-applied IDs to applied_ids
         for j in already_applied_jobs:
-            if j["id"] not in st["applied_ids"]:
+            if _has_valid_identity(j) and j.get("submission_verified") and j["id"] not in st["applied_ids"]:
                 st["applied_ids"].append(j["id"])
     state.update(commit_jobs)
 

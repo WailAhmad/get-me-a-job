@@ -46,11 +46,12 @@ def stats():
 
     # ── Last Run ─────────────────────────────────────────────────────────────
     lr_found         = len(last_run_jobs)  # total raw discovered
-    lr_matched_jobs  = [j for j in last_run_jobs
-                            if j.get("score", 0) >= 60 or j.get("status") == "already_applied"]
+    lr_matched_jobs  = [j for j in last_run_jobs if j.get("score", 0) >= 60]
     lr_matched       = len(lr_matched_jobs)
     # Easy Apply count = matched jobs that actually went through Easy Apply flow (not reclassified to external)
     lr_easy_apply    = len([j for j in lr_matched_jobs if j.get("easy_apply") and j.get("status") not in ("already_applied", "external", "skipped")])
+    lr_easy_already  = len([j for j in lr_matched_jobs if j.get("easy_apply") and j.get("status") == "already_applied"])
+    lr_easy_skipped  = len([j for j in last_run_jobs if j.get("easy_apply") and j.get("status") == "skipped"])
     lr_external      = len([j for j in last_run_jobs if j.get("status") == "external"])
     lr_failed        = len([j for j in last_run_jobs if j.get("status") == "failed"])
     lr_applied       = len([j for j in last_run_jobs if j.get("status") == "applied" and j.get("submission_verified")])
@@ -65,7 +66,7 @@ def stats():
     today_applied    = sum(1 for j in all_verified  if is_today(j.get("applied_at")))
     today_failed     = sum(1 for j in all_failed    if is_today(j.get("discovered_at")))
     today_scanned    = sum(1 for j in items          if is_today(j.get("discovered_at")))
-    today_matched    = sum(1 for j in items          if is_today(j.get("discovered_at")) and (j.get("score", 0) >= 60 or j.get("status") == "already_applied"))
+    today_matched    = sum(1 for j in items          if is_today(j.get("discovered_at")) and j.get("score", 0) >= 60)
     today_external   = sum(1 for j in all_external   if is_today(j.get("discovered_at")))
 
     # ── This week ────────────────────────────────────────────────────────────
@@ -78,6 +79,8 @@ def stats():
         "last_run_matched":     lr_matched,
         "last_run_filtered":    lr_filtered,
         "last_run_easy_apply":  lr_easy_apply,
+        "last_run_easy_already": lr_easy_already,
+        "last_run_easy_skipped": lr_easy_skipped,
         "last_run_external":    lr_external,
         "last_run_failed":      lr_failed,
         "last_run_applied":     lr_applied,
