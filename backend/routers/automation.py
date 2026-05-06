@@ -1008,6 +1008,22 @@ def _engine_loop():
 
     # Tag each job with the current run_id so we can distinguish new vs old
     run_id = state.get()["automation"].get("started_at") or time.time()
+    discovered_ids = {j.get("id") for j in discovered}
+    queued_from_previous = []
+    for old in state.get().get("jobs", {}).get("items", {}).values():
+        if old.get("id") in discovered_ids:
+            continue
+        if old.get("status") != "discovered":
+            continue
+        if not old.get("easy_apply") or int(old.get("score") or 0) < 60:
+            continue
+        if old.get("id") in state.get().get("applied_ids", []):
+            continue
+        queued_from_previous.append({**old, "resumed_from_queue": True})
+    queued_from_previous.sort(key=lambda j: int(j.get("score") or 0), reverse=True)
+    if queued_from_previous:
+        discovered.extend(queued_from_previous[:25])
+        _push("info", f"🔁 Resuming {min(len(queued_from_previous), 25)} queued Easy Apply job(s) left from previous interrupted runs.")
 
     def commit_jobs(st):
         st["automation"]["current_run_id"] = run_id

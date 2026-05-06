@@ -93,7 +93,7 @@ function EasyApplyCard({ easyApplyTotal, newApps, already, pending, queued, filt
           )}
           {(queued ?? 0) > 0 && (
             <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(99,102,241,0.14)', color:'#a5b4fc', border:'1px solid rgba(99,102,241,0.28)' }}>
-              {queued} queued
+              {queued} ready next run
             </span>
           )}
           <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(14,165,233,0.14)', color:'#38bdf8', border:'1px solid rgba(14,165,233,0.28)' }}>
