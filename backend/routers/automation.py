@@ -16,6 +16,7 @@ real-LinkedIn version. Swap `_discover_jobs` with a Selenium scraper to go
 live without touching the rest of the engine.
 """
 import asyncio
+import concurrent.futures
 import json
 import random
 import threading
@@ -37,6 +38,8 @@ import os as _os
 MAX_DAILY_APPLICATIONS = int(_os.environ.get("JOBS_LAND_DAILY_CAP", "50"))
 MAX_RETRIES = 2          # retry count for transient network errors per job
 _JITTER_LONG_EVERY = 7  # take a longer break every N applications
+APPLY_JOB_TIMEOUT_SECS = int(_os.environ.get("JOBS_LAND_APPLY_JOB_TIMEOUT_SECS", "180"))
+STALE_RUN_SECS = int(_os.environ.get("JOBS_LAND_STALE_RUN_SECS", "900"))
 
 # ── Sample data pool (used for the simulated discovery step) ──────────
 ROLES_POOL = [
@@ -848,6 +851,39 @@ def _push(level: str, msg: str):
     state.push_log(level, msg)
 
 
+def _automation_is_stale(auto: dict | None = None, now: float | None = None) -> bool:
+    auto = auto or state.get().get("automation", {})
+    if not auto.get("running"):
+        return False
+    now = now or time.time()
+    last_tick = auto.get("last_tick") or auto.get("started_at") or 0
+    return bool(last_tick and now - last_tick > STALE_RUN_SECS)
+
+
+def _mark_stale_run(auto: dict | None = None) -> bool:
+    if not _automation_is_stale(auto):
+        return False
+    _push("warn", f"⚠️ Automation watchdog stopped a stale run after {STALE_RUN_SECS // 60} minutes without progress. Please start a new run.")
+    _archive_current_run("stale")
+    def finish(st):
+        st["automation"]["running"] = False
+        st["automation"]["last_tick"] = time.time()
+    state.update(finish)
+    return True
+
+
+def _call_with_timeout(fn, timeout: int, timeout_message: str):
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(fn)
+    try:
+        return future.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        future.cancel()
+        return {"status": "error", "error": timeout_message, "pending_question": None}
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
 def _summarize_logs(logs: list[dict]) -> dict:
     summary = {"discovered": 0, "verified_applied": 0, "external": 0, "pending": 0, "skipped": 0, "warnings": 0}
     for log in logs:
@@ -985,6 +1021,8 @@ def _engine_loop():
     state.update(commit_jobs)
 
     matched_jobs = [j for j in discovered if j.get("score", 0) >= 60 or j.get("status") == "already_applied"]
+    matched_easy = [j for j in matched_jobs if j.get("easy_apply") and j.get("status") not in {"already_applied", "applied"}]
+    matched_external = [j for j in matched_jobs if not j.get("easy_apply")]
     
     parts = [f"🔎 Discovered {len(discovered)} jobs"]
     if already_applied_jobs:
@@ -993,6 +1031,7 @@ def _engine_loop():
         matched = [j for j in new_jobs if j.get("score", 0) >= 60]
         parts.append(f"— {len(matched)} matched your profile")
     _push("info", " ".join(parts) + ".")
+    _push("info", f"🧭 Decision queue: {len(matched_easy)} Easy Apply to inspect/apply, {len(matched_external)} external matches, {len(discovered) - len(matched_jobs)} below threshold.")
     time.sleep(0.4)
 
     # rank by score + recency
@@ -1047,6 +1086,8 @@ def _engine_loop():
 
         if job["score"] < 60:
             skip_count += 1
+            if skip_count % 75 == 0:
+                _push("info", f"   ⏭️ Skipped {skip_count} below-threshold jobs so far…")
             # Already committed as "skipped" — just move on
             continue
 
@@ -1078,7 +1119,18 @@ def _engine_loop():
                 if apply_driver is None:
                     from backend.services import linkedin_scraper as ls
                     apply_driver = ls._make_driver(headless=True)
-                result = _live_apply_easy(job, apply_driver)
+                    try:
+                        apply_driver.set_page_load_timeout(45)
+                        apply_driver.set_script_timeout(30)
+                        apply_driver.implicitly_wait(1)
+                    except Exception:
+                        pass
+                _push("info", f"   🧩 Easy Apply attempt {_attempt + 1}/{MAX_RETRIES + 1} for '{job['title']}' (timeout {APPLY_JOB_TIMEOUT_SECS}s)…")
+                result = _call_with_timeout(
+                    lambda j=job, d=apply_driver: _live_apply_easy(j, d),
+                    APPLY_JOB_TIMEOUT_SECS,
+                    f"Easy Apply attempt timed out after {APPLY_JOB_TIMEOUT_SECS}s",
+                )
             except Exception as exc:
                 result = {"status": "error", "error": str(exc), "pending_question": None}
 
@@ -1224,6 +1276,9 @@ def _ensure_scheduler():
 def status():
     s = state.get()
     auto = s["automation"]
+    if _mark_stale_run(auto):
+        s = state.get()
+        auto = s["automation"]
     return {
         "running": auto["running"],
         "today_count": auto.get("today_count", 0),
@@ -1236,6 +1291,8 @@ def status():
 @router.post("/start")
 def start():
     s = state.get()
+    if _mark_stale_run(s.get("automation")):
+        s = state.get()
     if not s["cv"].get("filename"):
         raise HTTPException(400, "Please upload your CV first.")
     if not s["preferences"].get("ready"):

@@ -1,7 +1,13 @@
 import unittest
 from unittest.mock import patch
 
-from backend.routers.automation import _is_infrastructure_apply_error, _live_search_keywords, _score
+from backend.routers.automation import (
+    _automation_is_stale,
+    _call_with_timeout,
+    _is_infrastructure_apply_error,
+    _live_search_keywords,
+    _score,
+)
 from backend.services.form_brain import best_option_match, normalise_for_match
 from backend.services.linkedin_applier import _profile_answer
 
@@ -119,6 +125,16 @@ class AutomationFilterTests(unittest.TestCase):
         for err in infrastructure_errors:
             with self.subTest(err=err):
                 self.assertTrue(_is_infrastructure_apply_error(err))
+
+    def test_stale_running_automation_is_detected(self):
+        self.assertTrue(_automation_is_stale({"running": True, "last_tick": 100}, now=1200))
+        self.assertFalse(_automation_is_stale({"running": True, "last_tick": 1000}, now=1100))
+        self.assertFalse(_automation_is_stale({"running": False, "last_tick": 100}, now=1200))
+
+    def test_apply_timeout_returns_infrastructure_error(self):
+        result = _call_with_timeout(lambda: __import__("time").sleep(0.2), 0.01, "Easy Apply attempt timed out after 1s")
+        self.assertEqual(result["status"], "error")
+        self.assertTrue(_is_infrastructure_apply_error(result["error"]))
 
 
 if __name__ == "__main__":

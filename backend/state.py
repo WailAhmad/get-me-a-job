@@ -193,6 +193,7 @@ def push_log(level: str, msg: str) -> None:
     with _LOCK:
         logs = _state["automation"]["logs"]
         logs.append({"ts": time.time(), "level": level, "msg": msg})
+        _state["automation"]["last_tick"] = time.time()
         if len(logs) > 200:
             del logs[: len(logs) - 200]
         _save(_state)
