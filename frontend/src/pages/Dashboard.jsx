@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getDashboardStats, getAutomationStatus, stopAutomation, startAutomation, clearJobs, getJobs, getLiveMode } from '../api/client'
-import { CheckCircle, Clock, Globe2, Play, Square, Radio, FileText, MessageSquare, AlertTriangle, Layers3, Trash2, XCircle, Zap } from 'lucide-react'
+import { CheckCircle, Clock, Globe2, Play, Square, Radio, FileText, MessageSquare, AlertTriangle, Layers3, Trash2, XCircle, Zap, Brain } from 'lucide-react'
 import AutomationPanel from '../components/AutomationPanel'
 import HourlyChart from '../components/HourlyChart'
 
@@ -352,6 +352,22 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
         <Card title="External"       value={stats?.last_run_external  } sub="no Easy Apply — open manually"                   icon={Globe2}  color="#a78bfa" onClick={() => navigate('/jobs')} />
         <Card title="Failed"         value={stats?.last_run_failed    } sub="Easy Apply errored — see Job Explorer for reason" icon={XCircle} color="#ef4444" onClick={() => navigate('/jobs')} />
         <Card title="Pending Review" value={stats?.last_run_pending   } sub={`${stats?.pending_questions ?? 0} questions · ${stats?.pending_verify ?? 0} to verify`} icon={Clock} color="#f59e0b" onClick={() => navigate('/pending')} />
+      </div>
+
+      <div className="card" style={{ marginBottom:22, display:'flex', alignItems:'flex-start', gap:12, flexWrap:'wrap' }}>
+        <div style={{ height:36, width:36, borderRadius:12, background:'rgba(37,99,235,.10)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <Brain size={17} style={{ color:'#2563eb' }} />
+        </div>
+        <div style={{ flex:1, minWidth:260 }}>
+          <div style={{ fontSize:14, fontWeight:800, color:'var(--text)', marginBottom:4 }}>Last-run decision summary</div>
+          <div style={{ fontSize:13, color:'var(--text-muted)', lineHeight:1.6 }}>
+            Scanned <strong>{stats?.last_run_found ?? 0}</strong> jobs, matched <strong>{stats?.last_run_matched ?? 0}</strong>,
+            kept <strong>{stats?.last_run_external ?? 0}</strong> external jobs, and found <strong>{stats?.last_run_easy_skipped ?? 0}</strong> Easy Apply jobs below the current threshold.
+          </div>
+        </div>
+        <button onClick={() => navigate('/jobs')} className="btn-secondary" style={{ whiteSpace:'nowrap' }}>
+          Review decisions
+        </button>
       </div>
 
       {/* ── TODAY section ──────────────────────────────────────── */}

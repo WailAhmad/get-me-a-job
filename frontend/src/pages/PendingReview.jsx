@@ -1,6 +1,27 @@
 import { useState, useEffect } from 'react'
 import { getPendingJobs, answerPendingJob, dismissJob } from '../api/client'
-import { Clock, Send, BookmarkPlus, ShieldAlert, Trash2 } from 'lucide-react'
+import { Clock, Send, BookmarkPlus, ShieldAlert, Trash2, Sparkles, HelpCircle } from 'lucide-react'
+
+function suggestedAnswer(job) {
+  const q = (job.pending_question || '').toLowerCase()
+  if (q.includes('notice')) return '30 days'
+  if (q.includes('salary')) return ''
+  if (q.includes('sponsor') || q.includes('visa')) return 'No'
+  if (q.includes('relocat')) return 'Yes'
+  if (q.includes('english') || q.includes('proficiency')) return 'Native / Bilingual'
+  if (q.includes('authorized') || q.includes('work authorization')) return 'Yes'
+  if (q.includes('experience') && /\byear/.test(q)) return String(Math.max(0, Number(job.years || 15)))
+  return ''
+}
+
+function pendingExplanation(job) {
+  const q = (job.pending_question || '').toLowerCase()
+  if (job.pending_kind === 'verify_source') return 'The app found a candidate but does not trust the live source URL enough to submit automatically.'
+  if (q.includes('please make a selection')) return 'LinkedIn rejected a required dropdown/radio choice. The retry needs the exact option to select.'
+  if (q.includes('valid answer')) return 'LinkedIn validation rejected the typed value. Use the exact format requested by the form.'
+  if (q.includes('salary')) return 'This is a sensitive answer. JobsLand should use your saved preference or ask you before submitting.'
+  return 'The agent paused instead of guessing because the answer affects a real application.'
+}
 
 export default function PendingReview({ onAnswered }) {
   const [jobs, setJobs] = useState([])
@@ -31,6 +52,12 @@ export default function PendingReview({ onAnswered }) {
     } finally { setBusy(b => ({ ...b, [job.id]: false })) }
   }
 
+  const useSuggestion = (job) => {
+    const suggestion = suggestedAnswer(job)
+    if (!suggestion) return
+    setDrafts(d => ({ ...d, [job.id]: suggestion }))
+  }
+
   const dismiss = async (jobId) => {
     try {
       await dismissJob(jobId)
@@ -42,7 +69,7 @@ export default function PendingReview({ onAnswered }) {
     <div className="animate-fade-in">
       <h1 className="page-title">Pending Review</h1>
       <p className="page-subtitle" style={{ marginBottom:20 }}>
-        Jobs the bot tried to apply to but couldn't answer one of the questions. Answer once and we'll remember it for next time.
+        JobsLand pauses here only when an Easy Apply form needs a real answer, validation failed, or a safe automatic answer is not available.
       </p>
 
       {jobs.length === 0
@@ -75,6 +102,32 @@ export default function PendingReview({ onAnswered }) {
                     {j.pending_kind === 'verify_source' ? 'Verification required' : 'Question'}
                   </div>
                   <div style={{ fontSize:14, color:'var(--text)' }}>{j.pending_question}</div>
+                </div>
+
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10, marginBottom:10 }}>
+                  <div style={{ padding:12, borderRadius:12, border:'1px solid var(--border)', background:'var(--bg-subtle)' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:800, color:'var(--text)', marginBottom:6 }}>
+                      <HelpCircle size={13} /> Why it paused
+                    </div>
+                    <div style={{ fontSize:12, lineHeight:1.55, color:'var(--text-muted)' }}>{pendingExplanation(j)}</div>
+                  </div>
+                  <div style={{ padding:12, borderRadius:12, border:'1px solid var(--border)', background:'var(--bg-subtle)' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:800, color:'var(--text)', marginBottom:6 }}>
+                      <Sparkles size={13} /> Suggested next action
+                    </div>
+                    {suggestedAnswer(j) ? (
+                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                        <span className="badge badge-blue">{suggestedAnswer(j)}</span>
+                        <button onClick={() => useSuggestion(j)} className="btn-secondary" style={{ padding:'6px 10px', fontSize:12 }}>
+                          Use suggestion
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize:12, lineHeight:1.55, color:'var(--text-muted)' }}>
+                        Type the exact answer or add it in Settings as a reusable application preference.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {j.pending_kind === 'verify_source' ? (

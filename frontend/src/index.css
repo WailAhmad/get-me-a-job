@@ -336,23 +336,32 @@ input, select, textarea {
     min-height: 0 !important;
     border-right: none !important;
     border-bottom: 1px solid var(--border) !important;
-    position: relative !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 30 !important;
   }
 
   .sidebar-logo {
-    padding: 14px 16px !important;
+    padding: 10px 14px !important;
   }
 
   .sidebar-nav {
     display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     gap: 6px !important;
-    padding: 10px 12px !important;
+    padding: 8px 12px !important;
     max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .sidebar-nav a {
+    justify-content: center !important;
+    padding: 8px 6px !important;
+    font-size: 12px !important;
   }
 
   .sidebar-footer {
-    padding: 10px 12px 14px !important;
+    display: none !important;
   }
 
   .app-main {
@@ -365,5 +374,35 @@ input, select, textarea {
 
   .page-title {
     font-size: 24px;
+  }
+
+  .chat-layout {
+    flex-direction: column !important;
+    min-height: auto !important;
+  }
+
+  .chat-layout > div:last-child {
+    width: 100% !important;
+    height: auto !important;
+    order: -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .sidebar-logo img {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  .sidebar-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+  }
+
+  .sidebar-nav a {
+    flex-direction: column !important;
+    gap: 3px !important;
+    font-size: 10px !important;
+    line-height: 1.1 !important;
   }
 }

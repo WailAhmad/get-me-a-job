@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getJobs, dismissJob, getLiveMode } from '../api/client'
 import { useNavigate } from 'react-router-dom'
-import { Search, ExternalLink, Briefcase, RefreshCw, Trash2, CheckCircle2, Globe2, Send, Zap, XCircle, AlertTriangle, PlugZap } from 'lucide-react'
+import { Search, ExternalLink, Briefcase, RefreshCw, Trash2, CheckCircle2, Globe2, Send, Zap, XCircle, AlertTriangle, PlugZap, Eye, Brain, SlidersHorizontal } from 'lucide-react'
 
 /* ───────────────────────── helpers ───────────────────────── */
 const scoreColor = (s) => s >= 85 ? '#34d399' : s >= 70 ? '#38bdf8' : '#fbbf24'
@@ -14,7 +14,7 @@ const scoreColor = (s) => s >= 85 ? '#34d399' : s >= 70 ? '#38bdf8' : '#fbbf24'
  *   suitable     : Easy Apply + still in the queue (passes score, may have been
  *                  manually clicked but not auto-applied yet)
  *   external     : No Easy Apply — must be opened on the open web
- *   null         : Skipped / dropped — not surfaced anywhere
+ *   skipped      : Found by LinkedIn but below the current match threshold
  */
 const SUITABLE_MIN_SCORE = 60   // matches backend scoring threshold
 
@@ -37,7 +37,7 @@ function parseFailReason(err) {
 }
 
 function bucketOf(j) {
-  if (j.status === 'skipped') return null
+  if (j.status === 'skipped') return 'skipped'
   if (j.status === 'failed')  return 'failed'
   if (j.easy_apply && j.submission_verified) return 'auto_applied'
   if (j.easy_apply && (j.score ?? 0) >= SUITABLE_MIN_SCORE) return 'suitable'
@@ -50,6 +50,7 @@ const BUCKET_META = {
   auto_applied: { label: 'Auto-Applied', color: '#34d399', icon: Send         },
   external:     { label: 'External',     color: '#a78bfa', icon: Globe2       },
   failed:       { label: 'Failed',       color: '#ef4444', icon: XCircle      },
+  skipped:      { label: 'Below Match',  color: '#64748b', icon: SlidersHorizontal },
 }
 
 /** Composite ranker for the External list: recent + relevant. */
@@ -63,8 +64,38 @@ const sortFor = (bucket) => {
   if (bucket === 'auto_applied') return (a,b) => (b.applied_at||0) - (a.applied_at||0)
   if (bucket === 'external')     return (a,b) => externalRank(b) - externalRank(a)
   if (bucket === 'failed')       return (a,b) => (b.score||0) - (a.score||0)  // highest score first so best misses are visible
+  if (bucket === 'skipped')      return (a,b) => (b.score||0) - (a.score||0)
   // suitable: score first, then recency
   return (a,b) => (b.score||0) - (a.score||0) || (a.posted_days_ago||0) - (b.posted_days_ago||0)
+}
+
+function decisionReasons(j) {
+  const score = Number(j.score || 0)
+  const text = `${j.title || ''} ${j.company || ''} ${j.description || ''}`.toLowerCase()
+  const reasons = []
+  const blockers = []
+
+  if (j.description) reasons.push('Job description read')
+  else reasons.push('Title/company scored only')
+  if (j.easy_apply) reasons.push('Easy Apply available')
+  else reasons.push('No Easy Apply')
+
+  if (/(ai|artificial intelligence|machine learning|data|analytics|governance|digital|platform|architect)/i.test(text)) {
+    reasons.push('AI/data keywords found')
+  } else {
+    blockers.push('Weak AI/data signal')
+  }
+  if (/(director|head|chief|vp|lead|manager|principal|senior)/i.test(text)) {
+    reasons.push('Seniority signal found')
+  } else {
+    blockers.push('Seniority unclear')
+  }
+  if (score < SUITABLE_MIN_SCORE) blockers.push(`Score ${score} is below ${SUITABLE_MIN_SCORE}`)
+  if (j.status === 'already_applied') reasons.push('LinkedIn says already applied')
+  if (j.status === 'pending') blockers.push('Needs a form answer')
+  if (j.status === 'failed') blockers.push(parseFailReason(j.error))
+
+  return { reasons: reasons.slice(0, 4), blockers: blockers.slice(0, 3) }
 }
 
 /* ───────────────────────── small UI bits ───────────────────────── */
@@ -77,9 +108,9 @@ function SummaryCard({ label, value, sub, icon:Icon, color, active, onClick }) {
         textAlign:'left',
         padding:16, minHeight:112,
         cursor:'pointer',
-        border: active ? `1px solid ${color}66` : '1px solid rgba(255,255,255,0.07)',
+        border: active ? `1px solid ${color}66` : '1px solid var(--border)',
         boxShadow: active ? `0 0 0 1px ${color}33, 0 8px 32px ${color}18` : undefined,
-        background: active ? `linear-gradient(180deg, ${color}10, rgba(255,255,255,0.02))` : undefined,
+        background: active ? `linear-gradient(180deg, ${color}10, var(--bg-card))` : undefined,
         transition:'all .15s',
       }}
     >
@@ -87,10 +118,10 @@ function SummaryCard({ label, value, sub, icon:Icon, color, active, onClick }) {
         <div style={{ height:34, width:34, borderRadius:11, background:`${color}18`, border:`1px solid ${color}30`, display:'flex', alignItems:'center', justifyContent:'center' }}>
           <Icon size={16} style={{ color }} />
         </div>
-        <div style={{ fontSize:11, color:'#94a3b8', fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em' }}>{label}</div>
+        <div style={{ fontSize:11, color:'var(--text-muted)', fontWeight:700, textTransform:'uppercase', letterSpacing:'.06em' }}>{label}</div>
       </div>
-      <div style={{ fontSize:28, color:'#f8fafc', fontWeight:800, lineHeight:1 }}>{value}</div>
-      <div style={{ fontSize:11, color:'#64748b', marginTop:7, lineHeight:1.45 }}>{sub}</div>
+      <div style={{ fontSize:28, color:'var(--text)', fontWeight:800, lineHeight:1 }}>{value}</div>
+      <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:7, lineHeight:1.45 }}>{sub}</div>
     </button>
   )
 }
@@ -141,7 +172,7 @@ export default function JobExplorer() {
   )
 
   const counts = useMemo(() => {
-    const c = { suitable:0, auto_applied:0, external:0, failed:0 }
+    const c = { suitable:0, auto_applied:0, external:0, failed:0, skipped:0 }
     tagged.forEach(j => { c[j._bucket] = (c[j._bucket] || 0) + 1 })
     return c
   }, [tagged])
@@ -164,7 +195,7 @@ export default function JobExplorer() {
         <div>
           <h1 className="page-title">Job Explorer</h1>
           <p className="page-subtitle">
-            Only jobs that pass scoring or come from open-web sources. Skipped jobs are filtered out automatically.
+            See what the agent found, why it matched, and which jobs were skipped below the current threshold.
           </p>
         </div>
         <button onClick={load} disabled={loading} className="btn-primary" style={{ gap:6 }}>
@@ -230,6 +261,20 @@ export default function JobExplorer() {
           icon={XCircle} color="#ef4444"
           active={bucket === 'failed'} onClick={() => setBucket('failed')}
         />
+        <SummaryCard
+          label="Below Match"
+          value={counts.skipped}
+          sub="Found by LinkedIn but below the current apply threshold"
+          icon={SlidersHorizontal} color="#64748b"
+          active={bucket === 'skipped'} onClick={() => setBucket('skipped')}
+        />
+      </div>
+
+      <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:14, padding:'10px 12px', borderRadius:14, background:'var(--bg-card)', border:'1px solid var(--border)' }}>
+        <Brain size={15} style={{ color:'#2563eb' }} />
+        <span style={{ fontSize:13, color:'var(--text)' }}>
+          Current apply threshold is <strong>score ≥ {SUITABLE_MIN_SCORE}</strong>. Below-match jobs are kept for transparency, not auto-applied.
+        </span>
       </div>
 
       {/* ─── list ─── */}
@@ -243,6 +288,7 @@ export default function JobExplorer() {
             {bucket === 'auto_applied' && "The agent has not auto-applied to anything yet."}
             {bucket === 'external'     && 'No external (open-web) jobs discovered yet.'}
             {bucket === 'failed'       && 'No failed apply attempts - great news!'}
+            {bucket === 'skipped'      && 'No below-match jobs in the current dataset.'}
           </p>
         </div>
       ) : (
@@ -250,6 +296,7 @@ export default function JobExplorer() {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(380px,1fr))', gap:12 }}>
             {visibleJobs.map(j => {
               const failReason = j._bucket === 'failed' ? parseFailReason(j.error) : null
+              const decision = decisionReasons(j)
               return (
               <div key={j.id} className="card" style={{ display:'flex', flexDirection:'column', gap:12, padding:'16px 18px',
                 border: j._bucket === 'failed' ? '1px solid rgba(239,68,68,0.22)' : undefined }}>
@@ -279,13 +326,13 @@ export default function JobExplorer() {
                 )}
 
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8 }}>
-                  <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
+                  <div style={{ background:'var(--bg-subtle)', border:'1px solid var(--border)', borderRadius:12, padding:10 }}>
                     <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>Apply type</div>
                     <div style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>
                       {j.easy_apply ? 'Easy Apply' : 'External'}
                     </div>
                   </div>
-                  <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
+                  <div style={{ background:'var(--bg-subtle)', border:'1px solid var(--border)', borderRadius:12, padding:10 }}>
                     <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>
                       {j._bucket === 'auto_applied' ? 'Submitted' : j._bucket === 'failed' ? 'Attempted' : 'Found'}
                     </div>
@@ -296,10 +343,33 @@ export default function JobExplorer() {
                         : '—'}
                     </div>
                   </div>
-                  <div style={{ background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.06)', borderRadius:12, padding:10 }}>
+                  <div style={{ background:'var(--bg-subtle)', border:'1px solid var(--border)', borderRadius:12, padding:10 }}>
                     <div style={{ fontSize:10, color:'#64748b', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700 }}>Match</div>
                     <div style={{ fontSize:12, color:scoreColor(j.score), marginTop:4 }}>
                       {j.score >= 85 ? 'Strong' : j.score >= 70 ? 'Good' : j.score ? 'Borderline' : '—'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:8 }}>
+                  <div style={{ border:'1px solid var(--border)', borderRadius:12, padding:10, background:'var(--bg-subtle)' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:800, color:'var(--text)', marginBottom:6 }}>
+                      <Brain size={12} /> Why this decision
+                    </div>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                      {decision.reasons.map(r => (
+                        <span key={r} className="badge badge-blue" style={{ fontSize:10, padding:'2px 7px' }}>{r}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ border:'1px solid var(--border)', borderRadius:12, padding:10, background:'var(--bg-subtle)' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:800, color:'var(--text)', marginBottom:6 }}>
+                      <Eye size={12} /> Review notes
+                    </div>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                      {(decision.blockers.length ? decision.blockers : ['No blockers found']).map(r => (
+                        <span key={r} className={decision.blockers.length ? 'badge badge-amber' : 'badge badge-green'} style={{ fontSize:10, padding:'2px 7px' }}>{r}</span>
+                      ))}
                     </div>
                   </div>
                 </div>

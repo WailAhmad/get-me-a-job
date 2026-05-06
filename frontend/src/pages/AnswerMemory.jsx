@@ -25,8 +25,8 @@ export default function AnswerMemory() {
       {answers.length === 0
         ? <div className="card" style={{ textAlign:'center', padding:40 }}><BookOpen size={32} style={{ color:'#475569', marginBottom:10 }} /><p style={{ color:'#64748b' }}>No saved answers yet — they appear automatically as you answer pending questions.</p></div>
         : <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {answers.map(ans => (
-              <div key={ans.id} className="card" style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
+            {answers.map((ans, idx) => (
+              <div key={`${ans.id || 'answer'}-${ans.question || idx}`} className="card" style={{ display:'flex', justifyContent:'space-between', gap:12 }}>
                 <div style={{ minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:600, color:'#94a3b8', marginBottom:4 }}>{ans.question}</div>
                   <div style={{ fontSize:14, color:'var(--text)' }}>{ans.answer}</div>

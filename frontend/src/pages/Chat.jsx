@@ -12,7 +12,7 @@ function renderText(text) {
 }
 
 /* ── Filter sidebar card ──────────────────────────────────────────── */
-function FilterSidebar({ prefs }) {
+function FilterSidebar({ prefs, onChoose }) {
   const country   = prefs?.country
   const countries = prefs?.countries || (country ? [country] : [])
   const days      = prefs?.recency_days
@@ -35,6 +35,13 @@ function FilterSidebar({ prefs }) {
     filters.push({ icon: Briefcase, label: 'Target Roles', value: `${roles.length} role${roles.length>1?'s':''}`, color: '#0ea5e9', items: roles })
   }
   const missing = !country ? 'region' : !days ? 'timeframe' : !roles.length ? 'target roles' : 'preferences'
+  const nextOptions = !country
+    ? ['GCC', 'Saudi Arabia', 'UAE', 'Europe', 'Remote']
+    : !days
+      ? ['today', 'last week', 'last 14 days', 'last 30 days']
+      : !roles.length
+        ? ['match my CV', 'Head of Data', 'AI Director', 'Data Governance']
+        : ['add Europe', 'last 30 days', 'only Easy Apply', 'match my CV']
 
   return (
     <div style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
@@ -89,24 +96,44 @@ function FilterSidebar({ prefs }) {
         ))
       )}
 
-      {/* JSON preview */}
+      {/* Assistant next-step card */}
+      <div style={{ padding:14, borderRadius:16, background:'var(--bg-card)', border:'1px solid var(--border)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+          <Sparkles size={15} style={{ color:'#2563eb' }} />
+          <span style={{ fontSize:13, fontWeight:800, color:'var(--text)' }}>
+            {ready ? 'Tune your search' : `Next: choose ${missing}`}
+          </span>
+        </div>
+        <p style={{ fontSize:12, color:'var(--text-muted)', lineHeight:1.5, marginBottom:10 }}>
+          {ready
+            ? 'You can still refine filters before running automation.'
+            : 'Jobby can continue from any of these choices.'}
+        </p>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+          {nextOptions.map(option => (
+            <button key={option} onClick={() => onChoose && onChoose(option)} style={{
+              border:'1px solid rgba(37,99,235,.22)', background:'rgba(37,99,235,.07)',
+              color:'#1d4ed8', borderRadius:999, padding:'6px 10px', fontSize:12,
+              fontWeight:800, cursor:'pointer',
+            }}>
+              {option}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Human-readable search plan */}
       {filters.length > 0 && (
         <div style={{ marginTop: 'auto' }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em', padding: '0 4px' }}>Filter JSON</div>
-          <pre style={{
-            fontSize: 10, lineHeight: 1.5, color: '#64748b', padding: 12, borderRadius: 12,
-            background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)',
-            overflow: 'auto', maxHeight: 160, margin: 0, fontFamily: "'SF Mono', 'Fira Code', monospace",
+          <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em', padding: '0 4px' }}>Search plan</div>
+          <div style={{
+            fontSize: 12, lineHeight: 1.6, color: 'var(--text)', padding: 12, borderRadius: 12,
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
           }}>
-{JSON.stringify({
-  region: country || null,
-  locations: countries.length ? countries : null,
-  recency_days: days || null,
-  target_roles: roles.length ? roles : null,
-  search_keywords: keywords.length ? keywords : null,
-  status: ready ? 'ready' : 'incomplete',
-}, null, 2)}
-          </pre>
+            Search <strong>{country || 'a region'}</strong>
+            {days ? <> from the <strong>{days === 1 ? 'past 24 hours' : `last ${days} days`}</strong></> : <> after you choose a timeframe</>}
+            {roles.length ? <> for <strong>{roles.slice(0, 3).join(', ')}</strong>{roles.length > 3 ? ` and ${roles.length - 3} more` : ''}</> : <> after you choose target roles</>}.
+          </div>
         </div>
       )}
 
@@ -196,7 +223,7 @@ export default function Chat({ cv, onPrefsUpdate }) {
     : ready && !noCV
       ? ['add Europe', 'change to last 30 days', 'only GCC', 'add remote']
     : !ready && !noCV && step === 'country'
-      ? ['GCC', 'Europe', 'Remote']
+      ? ['GCC', 'Saudi Arabia', 'UAE', 'Europe', 'Remote']
       : !ready && !noCV && step === 'roles'
         ? ['match my CV', 'Head of Data', 'AI Director']
         : []
@@ -236,7 +263,7 @@ export default function Chat({ cv, onPrefsUpdate }) {
   }
 
   return (
-    <div style={{ display:'flex', gap: 20, height:'calc(100vh - 80px)' }}>
+    <div className="chat-layout" style={{ display:'flex', gap: 20, minHeight:'calc(100vh - 136px)' }}>
       {/* ── Chat column ── */}
       <div style={{ flex: 1, display:'flex', flexDirection:'column', minWidth: 0 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, gap:12 }}>
@@ -271,7 +298,7 @@ export default function Chat({ cv, onPrefsUpdate }) {
           </div>
         )}
 
-        <div className="card" style={{ flex:1, overflowY:'auto', marginBottom:12, padding:16 }}>
+        <div className="card" style={{ flex:1, minHeight:360, overflowY:'auto', marginBottom:12, padding:16 }}>
           {messages.map((m,i) => (
             <div key={i} style={{ display:'flex', gap:10, marginBottom:14, justifyContent:m.role==='user'?'flex-end':'flex-start' }}>
               {m.role==='assistant' && (
@@ -387,7 +414,7 @@ export default function Chat({ cv, onPrefsUpdate }) {
       </div>
 
       {/* ── Filter sidebar ── */}
-      <FilterSidebar prefs={prefs} />
+      <FilterSidebar prefs={prefs} onChoose={sendSuggestion} />
     </div>
   )
 }
