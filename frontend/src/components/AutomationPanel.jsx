@@ -105,15 +105,16 @@ export default function AutomationPanel({ running, onStop, onRefresh }) {
   return (
     <div style={{
       borderRadius: 18, overflow: 'hidden',
-      background: '#0d1117',
-      border: `1px solid ${running ? 'rgba(52,211,153,0.2)' : 'rgba(255,255,255,0.07)'}`,
+      background: 'var(--bg-card)',
+      border: `1px solid ${running ? 'rgba(16,185,129,0.25)' : 'var(--border)'}`,
+      boxShadow: 'var(--shadow-card)',
       transition: 'border-color .3s',
       maxHeight: collapsed ? 72 : 560,
     }}>
       {/* ── Header ── */}
       <div style={{
         padding: '14px 18px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: '1px solid var(--border)',
         display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
       }}>
         {running ? (
@@ -122,10 +123,10 @@ export default function AutomationPanel({ running, onStop, onRefresh }) {
           <span style={{ width:10, height:10, borderRadius:'50%', background:'#475569', flexShrink:0 }} />
         )}
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:14, fontWeight:700, color:'#f1f5f9' }}>
+          <div style={{ fontSize:14, fontWeight:800, color:'var(--text)' }}>
             {running ? 'Automation Running…' : viewingRun ? `Run from ${new Date(viewingRun.started_at * 1000).toLocaleTimeString()}` : 'Last Run Complete'}
           </div>
-          <div style={{ fontSize:11, color:'#475569', marginTop:1 }}>
+          <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:1 }}>
             {running
               ? 'Discovering, scoring, and auto-applying to matching jobs'
               : viewingRun ? viewingRun.status : 'Review results below'
@@ -146,11 +147,11 @@ export default function AutomationPanel({ running, onStop, onRefresh }) {
             Stop
           </button>
         )}
-        <button onClick={() => setCollapsed(v => !v)} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.04)', color:'#94a3b8', fontSize:11, cursor:'pointer' }}>
+        <button onClick={() => setCollapsed(v => !v)} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg-subtle)', color:'var(--text-muted)', fontSize:11, cursor:'pointer' }}>
           {collapsed ? 'Expand Log' : 'Hide Log'}
         </button>
         {runs.length > 0 && (
-          <button onClick={() => setShowRuns(v => !v)} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.04)', color:'#94a3b8', fontSize:11, cursor:'pointer' }}>
+          <button onClick={() => setShowRuns(v => !v)} style={{ padding:'5px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg-subtle)', color:'var(--text-muted)', fontSize:11, cursor:'pointer' }}>
             {showRuns ? 'Hide Runs' : `Previous Runs (${runs.length})`}
           </button>
         )}
@@ -158,15 +159,15 @@ export default function AutomationPanel({ running, onStop, onRefresh }) {
 
       {/* ── Previous Runs dropdown ── */}
       {!collapsed && showRuns && (
-        <div style={{ padding:'10px 18px', borderBottom:'1px solid rgba(255,255,255,0.06)', background:'rgba(255,255,255,0.015)', display:'flex', gap:8, overflowX:'auto' }}>
+        <div style={{ padding:'10px 18px', borderBottom:'1px solid var(--border)', background:'var(--bg-subtle)', display:'flex', gap:8, overflowX:'auto' }}>
           {runs.map(run => (
             <button key={run.id} onClick={() => openRun(run)} style={{
               flexShrink:0, textAlign:'left', padding:'8px 12px', borderRadius:10,
-              background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.07)',
+              background:'var(--bg-card)', border:'1px solid var(--border)',
               cursor:'pointer', minWidth:140,
             }}>
-              <div style={{ fontSize:11, fontWeight:700, color:'#f1f5f9' }}>{new Date(run.started_at * 1000).toLocaleTimeString()}</div>
-              <div style={{ fontSize:10, color:'#64748b', marginTop:2 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'var(--text)' }}>{new Date(run.started_at * 1000).toLocaleTimeString()}</div>
+              <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:2 }}>
                 Applied {run.summary?.verified_applied || 0} · External {run.summary?.external || 0} · Skipped {run.summary?.skipped || 0}
               </div>
             </button>
@@ -184,7 +185,7 @@ export default function AutomationPanel({ running, onStop, onRefresh }) {
         overscrollBehavior: 'contain',
       }}>
         {logs.length === 0 && (
-          <div style={{ color:'#334155', fontSize:13, textAlign:'center', padding:'40px 0' }}>
+          <div style={{ color:'var(--text-muted)', fontSize:13, textAlign:'center', padding:'40px 0' }}>
             {running ? 'Starting automation…' : 'No logs yet. Run automation to see activity.'}
           </div>
         )}
@@ -212,7 +213,7 @@ export default function AutomationPanel({ running, onStop, onRefresh }) {
         {!running && logs.length > 0 && (
           <div style={{ marginTop:8, textAlign:'center', padding:'10px', borderRadius:12, background:'rgba(52,211,153,0.05)', border:'1px solid rgba(52,211,153,0.12)' }}>
             <div style={{ fontSize:13, fontWeight:700, color:'#34d399' }}>Session complete</div>
-            <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>Applied {stats.applied} · External {stats.external} · Skipped {stats.skipped}</div>
+            <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>Applied {stats.applied} · External {stats.external} · Skipped {stats.skipped}</div>
           </div>
         )}
         <div ref={bottomRef} />

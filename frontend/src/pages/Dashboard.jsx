@@ -15,8 +15,8 @@ function SectionLabel({ tag, tagColor, label, sub }) {
         background: `${tagColor}18`, color: tagColor,
         border: `1px solid ${tagColor}35`,
       }}>{tag}</span>
-      <span style={{ fontSize:13, fontWeight:600, color:'#cbd5e1' }}>{label}</span>
-      {sub && <span style={{ fontSize:11, color:'#475569' }}>· {sub}</span>}
+      <span style={{ fontSize:13, fontWeight:600, color:'var(--text-secondary)' }}>{label}</span>
+      {sub && <span style={{ fontSize:11, color:'var(--text-muted)' }}>· {sub}</span>}
     </div>
   )
 }
@@ -28,7 +28,7 @@ function AppliedCard({ byApp, already, onClick }) {
     <button onClick={onClick}
       style={{
         textAlign:'left', cursor:'pointer', gridColumn:'span 1',
-        background:'linear-gradient(180deg, rgba(16,185,129,0.07), rgba(255,255,255,0.02))',
+        background:'linear-gradient(180deg, rgba(16,185,129,0.09), var(--bg-card))',
         border:'1px solid rgba(16,185,129,0.35)',
         borderRadius:18, padding:18, position:'relative', overflow:'hidden',
         transition:'all .2s', width:'100%',
@@ -41,9 +41,9 @@ function AppliedCard({ byApp, already, onClick }) {
         <div style={{ height:32, width:32, borderRadius:10, background:'#10b98118', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <CheckCircle size={15} style={{ color:'#10b981' }} />
         </div>
-        <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em' }}>Applied</div>
+        <div style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.06em' }}>Applied</div>
       </div>
-      <div style={{ fontSize:30, fontWeight:800, color:'#f8fafc', lineHeight:1, marginBottom:10 }}>{total}</div>
+      <div style={{ fontSize:30, fontWeight:800, color:'var(--text)', lineHeight:1, marginBottom:10 }}>{total}</div>
       <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
         <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(16,185,129,0.14)', color:'#34d399', border:'1px solid rgba(16,185,129,0.28)' }}>
           {byApp ?? 0} by app
@@ -63,7 +63,7 @@ function EasyApplyCard({ easyApplyTotal, newApps, already, pending, queued, scan
     <button onClick={onClick}
       style={{
         textAlign:'left', cursor:'pointer', gridColumn:'span 1',
-        background:'linear-gradient(180deg, rgba(20,184,166,0.08), rgba(255,255,255,0.02))',
+        background:'linear-gradient(180deg, rgba(20,184,166,0.10), var(--bg-card))',
         border:'1px solid rgba(20,184,166,0.35)',
         borderRadius:18, padding:18, position:'relative', overflow:'hidden',
         transition:'all .2s', width:'100%',
@@ -76,11 +76,11 @@ function EasyApplyCard({ easyApplyTotal, newApps, already, pending, queued, scan
         <div style={{ height:32, width:32, borderRadius:10, background:'#14b8a618', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <Zap size={15} style={{ color:'#14b8a6' }} />
         </div>
-        <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em' }}>Easy Apply</div>
+        <div style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.06em' }}>Easy Apply</div>
       </div>
-      <div style={{ fontSize:30, fontWeight:800, color:'#f8fafc', lineHeight:1, marginBottom:10 }}>{scanning ? '…' : total}</div>
+      <div style={{ fontSize:30, fontWeight:800, color:'var(--text)', lineHeight:1, marginBottom:10 }}>{scanning ? '…' : total}</div>
       {scanning ? (
-        <div style={{ fontSize:12, color:'#94a3b8' }}>scanning…</div>
+        <div style={{ fontSize:12, color:'var(--text-muted)' }}>scanning…</div>
       ) : (
         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
           <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:99, background:'rgba(20,184,166,0.14)', color:'#2dd4bf', border:'1px solid rgba(20,184,166,0.28)' }}>
@@ -110,23 +110,23 @@ const Card = ({ title, value, sub, icon:Icon, color, onClick, accent }) => (
   <button onClick={onClick}
     style={{
       textAlign:'left', cursor: onClick?'pointer':'default',
-      background:'rgba(255,255,255,0.03)',
-      border:`1px solid ${accent ? color+'40' : 'rgba(255,255,255,0.07)'}`,
+      background:'var(--bg-card)',
+      border:`1px solid ${accent ? color+'40' : 'var(--border)'}`,
       borderRadius:18, padding:18, position:'relative', overflow:'hidden',
       transition:'all .2s', width:'100%',
     }}
     onMouseEnter={e => { if(onClick){ e.currentTarget.style.borderColor = color+'66'; e.currentTarget.style.transform='translateY(-1px)' } }}
-    onMouseLeave={e => { e.currentTarget.style.borderColor = accent ? color+'40' : 'rgba(255,255,255,0.07)'; e.currentTarget.style.transform='translateY(0)' }}
+    onMouseLeave={e => { e.currentTarget.style.borderColor = accent ? color+'40' : 'var(--border)'; e.currentTarget.style.transform='translateY(0)' }}
   >
     <div style={{ position:'absolute', right:-14, top:-14, height:60, width:60, borderRadius:'50%', background:color+'14', filter:'blur(2px)' }} />
     <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
       <div style={{ height:32, width:32, borderRadius:10, background:color+'18', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <Icon size={15} style={{ color }} />
       </div>
-      <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.06em' }}>{title}</div>
+      <div style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.06em' }}>{title}</div>
     </div>
-    <div style={{ fontSize:30, fontWeight:800, color:'#f8fafc', lineHeight:1 }}>{value ?? '—'}</div>
-    {sub && <div style={{ fontSize:11, color:'#64748b', marginTop:6 }}>{sub}</div>}
+    <div style={{ fontSize:30, fontWeight:800, color:'var(--text)', lineHeight:1 }}>{value ?? '—'}</div>
+    {sub && <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:6 }}>{sub}</div>}
   </button>
 )
 
@@ -150,9 +150,9 @@ const Countdown = ({ targetTime, running }) => {
   if (running) return null
   if (!targetTime) return null
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', background:'rgba(255,255,255,0.05)', borderRadius:8, border:'1px solid rgba(255,255,255,0.1)' }}>
+    <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', background:'var(--bg-card)', borderRadius:8, border:'1px solid var(--border)' }}>
       <Clock size={14} color="#94a3b8" />
-      <span style={{ fontSize:13, color:'#94a3b8', fontWeight:600, fontFamily:'monospace' }}>{remaining}</span>
+      <span style={{ fontSize:13, color:'var(--text-muted)', fontWeight:600, fontFamily:'monospace' }}>{remaining}</span>
     </div>
   )
 }
@@ -262,7 +262,7 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
           <div style={{ fontSize:13, fontWeight:700, color: liveMode.effective ? '#34d399' : '#fbbf24' }}>
             {liveMode.effective ? 'LIVE MODE — real LinkedIn submissions' : 'REAL MODE NOT READY'}
           </div>
-          <div style={{ fontSize:11, color:'#94a3b8', marginTop:1 }}>
+          <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:1 }}>
             {liveMode.effective
               ? 'Automation drives a real Selenium browser using your saved LinkedIn session. No limits — applies to all matched jobs.'
               : (liveMode.linkedin_session
@@ -282,11 +282,11 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
             { n:'2', title:'Chat with Jobby',         desc:'Set country, recency, and target roles in natural language.',           color:'#14b8a6' },
             { n:'3', title:'Run Automation',           desc:'We auto-apply to Easy Apply matches and route the rest to External / Pending.',  color:'#a78bfa' },
           ].map((s, i) => (
-            <div key={i} style={{ flex:'1 1 220px', display:'flex', alignItems:'flex-start', gap:12, padding:'0 16px', borderRight: i<2 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+            <div key={i} style={{ flex:'1 1 220px', display:'flex', alignItems:'flex-start', gap:12, padding:'0 16px', borderRight: i<2 ? '1px solid var(--border)' : 'none' }}>
               <div style={{ width:28, height:28, borderRadius:8, background:`${s.color}18`, border:`1px solid ${s.color}30`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:12, fontWeight:700, color:s.color }}>{s.n}</div>
               <div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#e2e8f0', marginBottom:4 }}>{s.title}</div>
-                <div style={{ fontSize:12, color:'#475569', lineHeight:1.6 }}>{s.desc}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:4 }}>{s.title}</div>
+                <div style={{ fontSize:12, color:'var(--text-muted)', lineHeight:1.6 }}>{s.desc}</div>
               </div>
             </div>
           ))}
@@ -299,8 +299,8 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
           <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14 }}>
             <AlertTriangle size={18} style={{ color:'#f59e0b', flexShrink:0 }} />
             <div>
-              <div style={{ fontSize:14, fontWeight:600, color:'#fbbf24' }}>Finish setting up before automation can run</div>
-              <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>Upload your CV, talk to Jobby, then connect LinkedIn before any automation starts.</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#b45309' }}>Finish setting up before automation can run</div>
+              <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>Upload your CV, talk to Jobby, then connect LinkedIn before any automation starts.</div>
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10 }}>
@@ -309,8 +309,8 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
                 {cvOK ? <CheckCircle size={16} style={{ color:'#34d399' }} /> : <FileText size={16} style={{ color:'#60a5fa' }} />}
               </div>
               <div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>1. {cvOK ? 'CV uploaded' : 'Upload your CV'}</div>
-                <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{cvOK ? `${cv.skills?.length||0} skills · ${cv.years||0} years` : 'PDF or DOCX — used to match jobs'}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>1. {cvOK ? 'CV uploaded' : 'Upload your CV'}</div>
+                <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>{cvOK ? `${cv.skills?.length||0} skills · ${cv.years||0} years` : 'PDF or DOCX — used to match jobs'}</div>
               </div>
             </button>
             <button onClick={() => navigate('/chat')} disabled={!cvOK} style={{ textAlign:'left', display:'flex', gap:12, alignItems:'center', padding:14, borderRadius:14, border:`1px solid ${prefsOK?'rgba(16,185,129,0.25)':'rgba(20,184,166,0.25)'}`, background:prefsOK?'rgba(16,185,129,0.06)':'rgba(20,184,166,0.06)', cursor:cvOK?'pointer':'not-allowed', opacity:cvOK?1:0.5 }}>
@@ -318,8 +318,8 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
                 {prefsOK ? <CheckCircle size={16} style={{ color:'#34d399' }} /> : <MessageSquare size={16} style={{ color:'#2dd4bf' }} />}
               </div>
               <div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>2. {prefsOK ? 'Preferences set' : 'Chat with Jobby'}</div>
-                <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{prefsOK ? `${prefs.country} · last ${prefs.recency_days} days` : 'Country, recency, target roles'}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>2. {prefsOK ? 'Preferences set' : 'Chat with Jobby'}</div>
+                <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>{prefsOK ? `${prefs.country} · last ${prefs.recency_days} days` : 'Country, recency, target roles'}</div>
               </div>
             </button>
             <button onClick={() => navigate('/settings')} disabled={!cvOK || !prefsOK} style={{ textAlign:'left', display:'flex', gap:12, alignItems:'center', padding:14, borderRadius:14, border:`1px solid ${linkedinOK?'rgba(16,185,129,0.25)':'rgba(14,165,233,0.25)'}`, background:linkedinOK?'rgba(16,185,129,0.06)':'rgba(14,165,233,0.06)', cursor:(cvOK&&prefsOK)?'pointer':'not-allowed', opacity:(cvOK&&prefsOK)?1:0.5 }}>
@@ -327,8 +327,8 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
                 {linkedinOK ? <CheckCircle size={16} style={{ color:'#34d399' }} /> : <Radio size={16} style={{ color:'#38bdf8' }} />}
               </div>
               <div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#f1f5f9' }}>3. {linkedinOK ? 'LinkedIn connected' : 'Connect LinkedIn'}</div>
-                <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{linkedinOK ? 'Browser session ready' : 'Required for live job discovery and apply'}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>3. {linkedinOK ? 'LinkedIn connected' : 'Connect LinkedIn'}</div>
+                <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>{linkedinOK ? 'Browser session ready' : 'Required for live job discovery and apply'}</div>
               </div>
             </button>
           </div>
@@ -372,8 +372,8 @@ export default function Dashboard({ cv, prefs, onRefresh }) {
       {/* Caps strip */}
       <div className="card" style={{ marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
         <div style={{ fontSize:12, color:'#64748b' }}>
-          <strong style={{ color:'#cbd5e1' }}>This hour:</strong> {stats?.hour_count ?? 0} applied  &nbsp;·&nbsp;
-          <strong style={{ color:'#cbd5e1' }}>Today:</strong> {stats?.today_count ?? 0} applied
+          <strong style={{ color:'var(--text)' }}>This hour:</strong> {stats?.hour_count ?? 0} applied  &nbsp;·&nbsp;
+          <strong style={{ color:'var(--text)' }}>Today:</strong> {stats?.today_count ?? 0} applied
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:11, color:'#475569' }}>

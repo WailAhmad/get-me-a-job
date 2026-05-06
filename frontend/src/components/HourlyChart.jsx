@@ -51,19 +51,19 @@ export default function HourlyChart({ jobs, title = 'Hourly Activity', subtitle 
     <div className="card" style={{ padding:18, overflow:'hidden' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:10, flexWrap:'wrap' }}>
         <div>
-          <div style={{ fontSize:14, fontWeight:700, color:'#f1f5f9' }}>{title}</div>
-          <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>{subtitle}</div>
+          <div style={{ fontSize:14, fontWeight:800, color:'var(--text)' }}>{title}</div>
+          <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>{subtitle}</div>
         </div>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
           {series.map(([key, color, label]) => (
-            <span key={key} style={{ display:'flex', alignItems:'center', gap:6, color:'#94a3b8', fontSize:11 }}>
+            <span key={key} style={{ display:'flex', alignItems:'center', gap:6, color:'var(--text-muted)', fontSize:11 }}>
               <span style={{ height:7, width:7, borderRadius:'50%', background:color }} /> {label}
             </span>
           ))}
         </div>
       </div>
       {!data.length ? (
-        <div style={{ textAlign:'center', padding:'30px 0', color:'#475569', fontSize:12 }}>
+        <div style={{ textAlign:'center', padding:'30px 0', color:'var(--text-muted)', fontSize:12 }}>
           No hourly activity yet — run the automation to populate this chart.
         </div>
       ) : (
@@ -82,11 +82,11 @@ export default function HourlyChart({ jobs, title = 'Hourly Activity', subtitle 
           ))}
           {data.map((d,i) => (
             <g key={d.key}>
-              <text x={x(i)} y={height - 6} fill="#475569" fontSize="10" textAnchor="middle">{d.label}</text>
+              <text x={x(i)} y={height - 6} fill="var(--text-muted)" fontSize="10" textAnchor="middle">{d.label}</text>
             </g>
           ))}
-          <text x={8} y={pad + 4} fill="#64748b" fontSize="10">{max}</text>
-          <text x={14} y={height - pad + 4} fill="#64748b" fontSize="10">0</text>
+          <text x={8} y={pad + 4} fill="var(--text-muted)" fontSize="10">{max}</text>
+          <text x={14} y={height - pad + 4} fill="var(--text-muted)" fontSize="10">0</text>
         </svg>
       )}
     </div>
